@@ -215,7 +215,7 @@ while [ ! -f STOP ]; do
 
     CLAUDE_ARGS="--model $MODEL"
     [ "$MODEL" != "haiku" ] && [ -n "$EFFORT" ] && CLAUDE_ARGS="$CLAUDE_ARGS --effort $EFFORT"
-    CLAUDE_ARGS="$CLAUDE_ARGS --bare -p --output-format json --dangerously-skip-permissions"
+    CLAUDE_ARGS="$CLAUDE_ARGS -p --output-format json --dangerously-skip-permissions"
 
     echo "Model: $MODEL | Effort: ${EFFORT:-(none)} | Step: $RECOVERY_STEP | Task: $CURRENT_TASK"
 
