@@ -41,10 +41,10 @@ mkdir -p .ralph
 AUTH_MOUNT=""
 AUTH_ENV=""
 if [ -d "$CLAUDE_DIR" ]; then
-    AUTH_MOUNT="-v $CLAUDE_DIR:/home/claude/.claude:ro"
+    AUTH_MOUNT="-v $CLAUDE_DIR:/home/claude/.claude"
 fi
 if [ -f "$HOME/.claude.json" ]; then
-    AUTH_MOUNT="$AUTH_MOUNT -v $HOME/.claude.json:/home/claude/.claude.json:ro"
+    AUTH_MOUNT="$AUTH_MOUNT -v $HOME/.claude.json:/home/claude/.claude.json"
 fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
