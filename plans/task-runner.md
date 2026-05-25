@@ -2,4 +2,4 @@
 
 ## Tasks
 
-- [ ] task-runner — [task](../tasks/active/task-runner.md)
+- [x] task-runner — [done](../tasks/done/task-runner.md)
