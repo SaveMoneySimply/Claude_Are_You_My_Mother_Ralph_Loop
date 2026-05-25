@@ -1,0 +1,76 @@
+# AYMM Architecture — Are You My Mother (Multi-Provider Ralph Loop)
+
+## What This Is
+An extension of the Ralph Loop that routes autonomous coding tasks through free AI APIs before
+falling back to Claude. Run `bash aymm.sh` instead of `bash ralph.sh` to use free-AI-first execution.
+
+Each task is tried by free-tier providers (Gemini → Mistral → Groq → OpenRouter) before Claude
+is invoked. If a free AI's output passes the test suite, Claude never gets involved.
+
+## Stack
+- Shell: bash
+- HTTP client: curl
+- JSON parsing: jq
+- Container: Docker (extends existing Ralph Loop infrastructure)
+- Test gate: bash syntax check (see Test Command below)
+
+## Key Files
+- `aymm.sh` — host wrapper (invoke this instead of ralph.sh)
+- `aymm-loop.sh` — container orchestrator (outer provider loop + inner execution loop)
+- `run_agent_task.sh` — per-provider task runner (context bundle → API → XML parse → test)
+- `provider-config.sh` — API configuration per provider
+- `prompt-aymm.md` — navigation wrapper for free AI context bundling
+- `test-providers.sh` — live connectivity test for all 4 providers
+- `ralph.sh` / `loop.sh` — unchanged; used as Claude fallback
+
+## Provider Priority
+1. Gemini 2.5 Flash (GEMINI_API_KEY) — most generous free tier, large context window
+2. Mistral Large (MISTRAL_API_KEY) — Codestral is coding-specific
+3. Groq Llama 3.3 70B (GROQ_API_KEY) — fastest inference, strict per-minute caps
+4. OpenRouter free models (OPENROUTER_API_KEY) — broadest model variety, fewest free requests
+5. Claude fallback via existing loop.sh
+
+## Escalation
+- 2× consecutive failures on one provider → switch provider
+- HTTP 429 → immediate provider switch
+- HTTP 403 → mark provider exhausted for session
+- All providers fail one task → escalate to Claude (loop.sh)
+- Claude fails same task → BLOCKED (no second free-AI round)
+- All providers rate-limited → STOP + ntfy notification (user chooses: run ralph.sh now or wait ~1hr)
+
+## Free AI Output Format
+The task runner sends file contents as context and asks the free AI to return changes as XML blocks:
+```xml
+<file path="src/foo.sh">
+...full file content...
+</file>
+```
+The runner parses these blocks and writes them to disk, then runs the test command.
+
+## Environment Variables Required
+- `ANTHROPIC_API_KEY` — existing, required for Claude fallback
+- `GEMINI_API_KEY` — Google AI Studio (free tier, no credit card required)
+- `GROQ_API_KEY` — groq.com (free tier)
+- `MISTRAL_API_KEY` — console.mistral.ai (free tier)
+- `OPENROUTER_API_KEY` — openrouter.ai (free tier)
+
+## Test Command
+```bash
+bash -n aymm.sh && bash -n aymm-loop.sh && bash -n run_agent_task.sh && bash -n provider-config.sh
+```
+Bash syntax check — runs after every step, zero API calls, no quota burned during build.
+
+## Smoke Test (run manually after loop completes — requires live API keys)
+```bash
+bash test-providers.sh
+```
+Hits each provider with a minimal real request. Have all four free API keys set in your shell before running.
+
+## Ralph Settings
+autonomy: low
+
+## Firewall Additions
+generativelanguage.googleapis.com
+api.groq.com
+api.mistral.ai
+openrouter.ai

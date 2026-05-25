@@ -1,5 +1,10 @@
-# Plan
+# PLAN — Are You My Mother (AYMM)
 
 <!-- Priority order: top = highest. Mark done when all tasks in a sub-plan are complete. -->
 
-- [ ] Example area — [plan](plans/example.md)
+Status: In Progress
+
+- [ ] Phase 1: Provider Infrastructure — [plan](plans/provider-infrastructure.md)
+- [ ] Phase 2: Task Runner — [plan](plans/task-runner.md)
+- [ ] Phase 3: AYMM Loop Orchestrator — [plan](plans/aymm-orchestrator.md)
+- [ ] Phase 4: Integration & README — [plan](plans/integration.md)
