@@ -2,7 +2,7 @@
 # Host-side wrapper. Run from project root:
 #   bash ralph.sh        — execution mode (default): works through tasks
 #   bash ralph.sh plan   — breakdown mode: generates task files from plans
-# Requires: docker, ANTHROPIC_API_KEY set in environment
+# Requires: docker, and either 'claude login' (subscription) or ANTHROPIC_API_KEY set
 set -euo pipefail
 
 MODE="${1:-execute}"
@@ -15,9 +15,11 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
-if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-    echo "ERROR: ANTHROPIC_API_KEY is not set."
-    echo "  export ANTHROPIC_API_KEY=sk-ant-..."
+CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
+if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ ! -f "$CREDENTIALS_FILE" ]; then
+    echo "ERROR: No Claude authentication found."
+    echo "  Option 1: run 'claude login' to use your Claude subscription"
+    echo "  Option 2: export ANTHROPIC_API_KEY=sk-ant-..."
     exit 1
 fi
 
@@ -35,6 +37,16 @@ fi
 
 mkdir -p .ralph
 
+# Auth: use credentials file (subscription) or API key
+AUTH_MOUNT=""
+AUTH_ENV=""
+if [ -f "$CREDENTIALS_FILE" ]; then
+    AUTH_MOUNT="-v $CREDENTIALS_FILE:/home/claude/.claude/.credentials.json:ro"
+fi
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+    AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+fi
+
 # In plan mode, swap prompt.md for prompt-plan.md inside the container
 PROMPT_MOUNT=""
 if [ "$MODE" = "plan" ]; then
@@ -50,7 +62,8 @@ echo ""
 docker run --rm \
     -v "$(pwd):/workspace" \
     ${PROMPT_MOUNT} \
-    -e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" \
+    ${AUTH_MOUNT} \
+    ${AUTH_ENV} \
     -e "NTFY_TOPIC=${NTFY_TOPIC:-}" \
     --cap-add=NET_ADMIN \
     --cap-add=NET_RAW \
