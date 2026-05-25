@@ -36,6 +36,7 @@ ALLOWED_DOMAINS=(
     pypi.org
     files.pythonhosted.org
     ntfy.sh
+    claude.ai
 )
 
 for domain in "${ALLOWED_DOMAINS[@]}"; do
