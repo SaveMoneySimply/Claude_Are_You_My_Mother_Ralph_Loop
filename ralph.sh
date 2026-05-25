@@ -15,8 +15,8 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
-CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
-if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ ! -f "$CREDENTIALS_FILE" ]; then
+CLAUDE_DIR="$HOME/.claude"
+if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ ! -f "$CLAUDE_DIR/.credentials.json" ]; then
     echo "ERROR: No Claude authentication found."
     echo "  Option 1: run 'claude login' to use your Claude subscription"
     echo "  Option 2: export ANTHROPIC_API_KEY=sk-ant-..."
@@ -40,8 +40,11 @@ mkdir -p .ralph
 # Auth: use credentials file (subscription) or API key
 AUTH_MOUNT=""
 AUTH_ENV=""
-if [ -f "$CREDENTIALS_FILE" ]; then
-    AUTH_MOUNT="-v $CREDENTIALS_FILE:/home/claude/.claude/.credentials.json:ro"
+if [ -d "$CLAUDE_DIR" ]; then
+    AUTH_MOUNT="-v $CLAUDE_DIR:/home/claude/.claude:ro"
+fi
+if [ -f "$HOME/.claude.json" ]; then
+    AUTH_MOUNT="$AUTH_MOUNT -v $HOME/.claude.json:/home/claude/.claude.json:ro"
 fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
