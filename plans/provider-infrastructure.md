@@ -2,4 +2,4 @@
 
 ## Tasks
 
-- [ ] provider-infrastructure — [task](../tasks/active/provider-infrastructure.md)
+- [x] provider-infrastructure — [done](../tasks/done/provider-infrastructure.md)
