@@ -58,6 +58,12 @@ echo "Firewall configured. All other egress blocked."
 [ -f /workspace/CLAUDE.md ]       && chmod 0444 /workspace/CLAUDE.md
 [ -f /workspace/ARCHITECTURE.md ] && chmod 0444 /workspace/ARCHITECTURE.md
 
+# Uncomment once engine files are stable and you want to prevent accidental edits:
+# [ -f /workspace/loop.sh ]            && chmod 0444 /workspace/loop.sh
+# [ -f /workspace/prompt.md ]          && chmod 0444 /workspace/prompt.md
+# [ -f /workspace/provider-config.sh ] && chmod 0444 /workspace/provider-config.sh
+# [ -f /workspace/run_agent_task.sh ]  && chmod 0444 /workspace/run_agent_task.sh
+
 # --- DROP TO NON-ROOT ---
 
 # Match claude's UID to the workspace owner so files written inside the container
