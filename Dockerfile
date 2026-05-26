@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     git \
     iptables \
     jq \
+    perl \
     ripgrep \
     && rm -rf /var/lib/apt/lists/*
 

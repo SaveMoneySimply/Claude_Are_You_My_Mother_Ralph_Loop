@@ -231,6 +231,7 @@ while [[ ! -f STOP ]]; do
             STOP_MSG="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash aymm.sh\` again."
             echo "$STOP_MSG" > STOP
             notify "AYMM: all providers rate-limited" "$STOP_MSG"
+            break
         else
             echo "All free providers exhausted for task ${CURRENT_TASK} — escalating to Claude"
             touch ".ralph/aymm-escalate.txt"
@@ -267,8 +268,7 @@ while [[ ! -f STOP ]]; do
     # ── Handle exit code ─────────────────────────────────────────────────────
     case "$exit_code" in
         0)
-            # Pass: mark step done, commit, reset failure counter
-            mark_step_done "$CURRENT_TASK"
+            # Pass: commit, reset failure counter (AI already marked step done in task file)
             git_commit_step "$CURRENT_TASK" "$CURRENT_PROVIDER"
             reset_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
             echo "Provider ${CURRENT_PROVIDER} succeeded on task ${CURRENT_TASK}"
@@ -286,14 +286,14 @@ while [[ ! -f STOP ]]; do
                 advance_provider "$CURRENT_TASK" "failure"
             fi
             ;;
-        3)
-            # Forbidden/exhausted (403): treat as rate-limit exhaustion
-            echo "Provider ${CURRENT_PROVIDER} forbidden/exhausted (403) — switching provider"
+        100)
+            # Rate limited (429): advance to next provider immediately
+            echo "Provider ${CURRENT_PROVIDER} rate-limited (429) — switching provider"
             advance_provider "$CURRENT_TASK" "rate_limit"
             ;;
-        429)
-            # Rate limited: advance to next provider immediately
-            echo "Provider ${CURRENT_PROVIDER} rate-limited (429) — switching provider"
+        101)
+            # Forbidden/exhausted (403): treat as rate-limit exhaustion
+            echo "Provider ${CURRENT_PROVIDER} forbidden/exhausted (403) — switching provider"
             advance_provider "$CURRENT_TASK" "rate_limit"
             ;;
         *)

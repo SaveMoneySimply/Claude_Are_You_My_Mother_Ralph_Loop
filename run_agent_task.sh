@@ -122,11 +122,11 @@ handle_http_status() {
         200) return 0 ;;
         429)
             echo "Error: rate limited (429)" >&2
-            exit 429
+            exit 100
             ;;
         403)
             echo "Error: forbidden (403) — provider may be exhausted" >&2
-            exit 3
+            exit 101
             ;;
         *)
             echo "Error: unexpected HTTP status ${status}" >&2
