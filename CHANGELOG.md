@@ -6,3 +6,4 @@
 2026-05-25 | task-runner | Implemented run_agent_task.sh with context bundler, Gemini + OpenAI-compat API calls, XML response parser, and test runner | [task](tasks/done/task-runner.md)
 2026-05-26 | aymm-orchestrator | Implemented aymm-loop.sh with multi-provider orchestration, failure tracking, rate-limit switching, Claude escalation, and provider state logging | [task](tasks/done/aymm-orchestrator.md)
 2026-05-26 | integration | Wrote aymm.sh, prompt-aymm.md, updated README with AYMM section; all syntax checks pass | [task](tasks/done/integration.md)
+2026-05-26 | ralph-v2 | Migrated to 4-stage task pipeline (0_backlog/1_queue/2_active/3_done); bash-side navigation in loop.sh; prompt.md shrunk to 11 lines; CLAUDE.md and ARCHITECTURE.md updated | [task](tasks/3_done/ralph-v2.md)
