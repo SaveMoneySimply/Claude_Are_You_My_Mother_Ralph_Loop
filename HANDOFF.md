@@ -49,5 +49,6 @@ cat tasks/1_queue/ralph-v2.md
 cat tasks/1_queue/aymm-unify.md
 
 # When ready to implement Task 1 (tell Claude):
-# "Implement tasks/1_queue/ralph-v2.md — start with Step 1"
+# "Implement tasks/1_queue/ralph-v2.md one step at a time.
+#  Do Step 1, then stop and wait for me to confirm before continuing."
 ```
