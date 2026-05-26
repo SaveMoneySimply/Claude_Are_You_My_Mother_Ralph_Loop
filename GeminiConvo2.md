@@ -1,185 +1,176 @@
-Here is the complete, cohesive architectural specification for your **AYMM (Are You My Mother) Phase-Gate and Flight-Recorder Extension**.
-
-You can copy and paste this entire response directly into Claude Code once your usage resets. It provides Claude with the complete structural mental map, the modified code snippets, and the underlying reasoning so she can implement it without burning unnecessary tokens.
+Here is a comprehensive, production-ready specification for **Ralph v2 (Structural Self-Isolation & Token Optimization)**. It brings together our entire conversation regarding file isolation, directory-driven phase tracking, and bash-pre-parsed token stripping into a clear blueprint you can hand off directly to Claude.
 
 ---
 
-# ARCHITECTURE PROPOSAL: Phase-Gate Reviews & Flight-Recorder Logging for AYMM
+# Ralph v2 Production Specification — Structural Self-Isolation & Token Optimization
 
-## 1. Core Intent & Metaphor
+This document outlines the architectural changes required to upgrade the Ralph Loop from v1 to v2.
 
-The **AYMM (Are You My Mother)** loop is designed to minimize Claude token burn by running autonomous task steps through free-tier providers (Gemini, Mistral, Groq, OpenRouter). The task steps are like a wandering hatchling searching for a provider that can satisfy the local bash syntax gate.
+## Core Objectives
 
-To prevent compounding mistakes or logical drift across individual steps, we introduce a two-tier boundary system:
-
-1. **The Task Step Gate (Free & Local):** Individual checklist items use low-cost `bash -n` syntax validation.
-2. **The Phase Gate Review (Claude-Powered Last Resort):** Once an *entire* task phase file (e.g., a full Markdown specification file containing multiple steps) has all its checkboxes ticked, the loop pauses execution. It wakes Claude up in the nest for a highly constrained, single-turn **Phase Gate Review** using advanced test commands and structural code auditing before advancing to the next file.
-
-Regardless of whether a step passes or fails, a comprehensive **Flight Recorder Diary** logs all code modifications and standard errors, providing Claude with full architectural context if she ever needs to step in.
+1. **Structural Self-Isolation ("Don't Pick Your Nose"):** Separate the immutable execution engine from the local project files to ensure the loop agent cannot physically alter its own codebase.
+2. **Extreme Token Efficiency:** Move state-parsing and navigation out of Claude's context window and into native Bash pre-processing, dropping typical iteration routing context down significantly.
+3. **Directory-Driven State Machine:** Replace index file maintenance (`PLAN.md`, `plans/*.md`) with physical file placement across specialized directories to make project state deterministic and human-visible.
 
 ---
 
-## 2. Updated File Blueprint & Implementations
+## 1. Directory & Mount Architecture
 
-### A. Dynamic Task Files (The Planning Pattern)
+Instead of mounting a single workspace containing both the engine scripts and project codebase, Ralph v2 uses a **Dual-Volume Mount Configuration** inside the container.
 
-When generating task files via `bash aymm.sh plan`, the planner must append strict phase-testing instructions at the bottom of each phase Markdown file:
+### The Host and Container Separation
 
-```markdown
-## Phase Gate Review
-**Advanced Test Command:** pytest tests/test_core.py && bash scripts/verify_integration.sh
-**Review Constraint:** You are a strict Senior Architect. Review the changes applied during this phase ONLY for logical regressions, infinite loops, or breaking architectural patterns. Do NOT refactor formatting, style, or syntax. Reply EXACTLY with "PHASE_PASSED" or provide an explicit error block.
+* **`/engine` (Read-Only):** Mounts the global `~/tools/ralph` directory containing the core engine logic. Marked `:ro` at the system level.
+* **`/workspace` (Read-Write):** Mounts the active project working directory (`$(pwd)`). Marked `:rw`.
+
+### Updated Host Wrapper (`ralph.sh`)
+
+The host script is installed globally and handles environment routing and the dual-mount contract:
+
+```bash
+#!/usr/bin/env bash
+# ~/tools/ralph/ralph.sh
+set -euo pipefail
+
+MODE="${1:-execute}"
+IMAGE="ralph:v2"
+ENGINE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+WORKSPACE_DIR="$(pwd)"
+
+if [ ! -f "$WORKSPACE_DIR/ARCHITECTURE.md" ]; then
+    echo "ERROR: ARCHITECTURE.md not found in $WORKSPACE_DIR"
+    exit 1
+fi
+
+# Ensure internal states folder architecture exists locally
+mkdir -p tasks/{0_backlog,1_queue,2_active,3_done} .ralph
+
+# Handle Claude Authentication
+AUTH_MOUNT=""
+AUTH_ENV=""
+[ -d "$HOME/.claude" ] && AUTH_MOUNT="-v $HOME/.claude:/home/claude/.claude"
+[ -f "$HOME/.claude.json" ] && AUTH_MOUNT="$AUTH_MOUNT -v $HOME/.claude.json:/home/claude/.claude.json"
+[ -n "${ANTHROPIC_API_KEY:-}" ] && AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+
+docker run -it --rm \
+  --cap-add=NET_ADMIN --cap-add=NET_RAW \
+  -v "$ENGINE_DIR:/engine:ro" \
+  -v "$WORKSPACE_DIR:/workspace:rw" \
+  $AUTH_MOUNT \
+  $AUTH_ENV \
+  -e NTFY_TOPIC="${NTFY_TOPIC:-}" \
+  "$IMAGE" /bin/bash /engine/loop.sh "$MODE"
 
 ```
 
-### B. Upgrading `run_agent_task.sh` (Artifact Collection)
+---
 
-We modify `run_agent_task.sh` to pipe standard errors to a known location during local testing and track files touched during execution:
+## 2. Directory-Driven Phase Tracking
+
+We eliminate centralized markdown indexes. The filesystem's folder distribution becomes the source of truth for the project lifecycle.
+
+```
+tasks/
+├── 0_backlog/        ← Phase 1: High-level requirements and un-itemized tasks
+├── 1_queue/          ← Phase 2: Broken down, fully structured task files ready for execution
+├── 2_active/         ← Phase 3: THE single task currently in progress (Strict Limit: 1)
+└── 3_done/           ← Phase 3: Archive of fully completed and merged tasks
+
+```
+
+### Phase Lifecycles
+
+* **Phase 0 & 1 (Setup & High-Level Planning):** User and Claude create `ARCHITECTURE.md` and populate raw markdown placeholders into `tasks/0_backlog/`.
+* **Phase 2 (Task Breakdown Mode - `bash ralph.sh plan`):** The engine takes the first file from `0_backlog/`, passes it to Claude with `prompt-plan.md` to append explicit, sequential checkbox steps, and writes the output directly into `tasks/1_queue/`.
+* **Phase 3 (Autonomous Loop Execution - `bash ralph.sh`):** The engine pulls the first alphabetical item from `1_queue/` into `2_active/` and processes it step-by-step.
+
+---
+
+## 3. Token-Stripping Bash Parser (`loop.sh`)
+
+Instead of throwing index files at Claude and forcing the LLM to search for what to do next, `loop.sh` extracts *only* the specific target step and passes it as a strict, localized execution context.
+
+### The Upgraded Execution & Routing Logic
 
 ```bash
-# Append tracking for modified files when the XML parser applies blocks
-# (Inside your XML parsing block where files are written to disk)
-echo "$target_path" >> .ralph/aymm-touched-files.log
+# Inside /engine/loop.sh running inside the container
+cd /workspace
 
-run_test_command() {
-    local arch_file="${SCRIPT_DIR}/ARCHITECTURE.md"
-    if [[ ! -f "$arch_file" ]]; then
-        echo "Error: ARCHITECTURE.md not found" >&2
-        return 2
+MODE="${1:-execute}"
+
+# --- PHASE 2 ROUTING: BREAKDOWN MODE ---
+if [ "$MODE" = "plan" ]; then
+    TARGET=$(ls tasks/0_backlog/*.md 2>/dev/null | head -n 1)
+    if [ -z "$TARGET" ]; then
+        echo "Phase 2 Complete: Backlog is fully broken down." > STOP
+        exit 0
     fi
+    # Execute breakdown on this single file, outputting straight to queue
+    cat /engine/prompt-plan.md | claude ... > "tasks/1_queue/$(basename "$TARGET")"
+    rm "$TARGET"
+    exit 0
+fi
 
-    local test_cmd
-    test_cmd="$(awk '/^## Test Command/{found=1; next} found && /^```/{found=2; next} found==2 && /^```/{exit} found==2{print}' "$arch_file" | head -1)"
+# --- PHASE 3 ROUTING: EXECUTION MODE ---
+ACTIVE_FILE=$(ls tasks/2_active/*.md 2>/dev/null | head -n 1)
 
-    if [[ -z "$test_cmd" ]]; then
-        echo "Error: could not find test command in ARCHITECTURE.md" >&2
-        return 2
-    fi
-
-    echo "Running test: $test_cmd"
-    
-    # Capture stderr to a temporary log so the orchestrator loop can record it
-    if eval "$test_cmd" 2> ".ralph/aymm-test-error.log"; then
-        rm -f ".ralph/aymm-test-error.log"
-        return 0
+# Pipeline transition: if no task is active, pull the next in line from the queue
+if [ -z "$ACTIVE_FILE" ]; then
+    NEXT_JOB=$(ls tasks/1_queue/*.md 2>/dev/null | sort | head -n 1)
+    if [ -n "$NEXT_JOB" ]; then
+        mv "$NEXT_JOB" tasks/2_active/
+        ACTIVE_FILE=$(ls tasks/2_active/*.md | head -n 1)
     else
-        return 2
+        echo "Phase 3 Complete: All tasks in queue resolved!" > STOP
+        exit 0
     fi
-}
+fi
 
-```
+CURRENT_TASK=$(basename "$ACTIVE_FILE" .md)
+echo "$CURRENT_TASK" > .ralph/last-task.txt
 
-### C. Upgrading `aymm-loop.sh` (The Logging and Phase Review Orchestrator)
+# EXTRACT ONLY THE NEXT UNCHECKED STEP (The Token Saver)
+NEXT_STEP=$(grep -m 1 '^- \[ \]' "$ACTIVE_FILE" || true)
 
-We modify the inner execution loop's response handler and implement the conditional check for phase completion:
+if [ -z "$NEXT_STEP" ]; then
+    # No unchecked checkboxes remain: trigger final verification gate
+    EXECUTION_CONTEXT="All sub-steps are complete. Run the task test command, commit, merge to main, and close the task."
+else
+    # Isolate execution scope entirely
+    EXECUTION_CONTEXT="Your singular focus for this iteration is to complete this step:
+$NEXT_STEP
 
-```bash
-    # Run the per-provider task step
-    exit_code=0
-    bash "${WORKDIR}/run_agent_task.sh" --provider="${CURRENT_PROVIDER}" || exit_code=$?
+When finished, evaluate the outcome and write 'pass' or 'fail' to .ralph/last-result.txt."
+fi
 
-    case "$exit_code" in
-        0)
-            reset_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
-            echo "Provider ${CURRENT_PROVIDER} succeeded on task step."
-            
-            # Record successful modifications to the Flight Recorder
-            {
-                echo "=================================================="
-                echo "PROVIDER SUCCESS: ${CURRENT_PROVIDER}"
-                echo "TASK STEP COMPLETE: ${CURRENT_TASK}"
-                echo "TIMESTAMP: $(date '+%Y-%m-%d %H:%M:%S')"
-                echo "STATUS: Passed syntax gate, applied to workspace."
-                echo "--------------------------------------------------"
-                echo "FILES MODIFIED IN THIS STEP:"
-                cat .ralph/aymm-touched-files.log 2>/dev/null || echo "Unknown files."
-                echo "=================================================="
-                echo ""
-            } >> ".ralph/aymm-flight-recorder.log"
-            rm -f .ralph/aymm-touched-files.log
-            ;;
-        2)
-            increment_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
-            fail_count="$(get_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK")"
-            echo "Provider ${CURRENT_PROVIDER} failed test gate (count: ${fail_count})"
-            
-            # Record the failure details to the Flight Recorder
-            {
-                echo "=================================================="
-                echo "PROVIDER ATTEMPT FAILURE: ${CURRENT_PROVIDER}"
-                echo "TASK STEP: ${CURRENT_TASK}"
-                echo "TIMESTAMP: $(date '+%Y-%m-%d %H:%M:%S')"
-                echo "FAILURE NUMBER: ${fail_count}"
-                echo "--------------------------------------------------"
-                echo "TEST FAILURE OUTPUT:"
-                cat .ralph/aymm-test-error.log 2>/dev/null || echo "No stderr captured."
-                echo "=================================================="
-                echo ""
-            } >> ".ralph/aymm-flight-recorder.log"
-            rm -f .ralph/aymm-test-error.log .ralph/aymm-touched-files.log
-            ;;
-        *)
-            echo "Provider ${CURRENT_PROVIDER} returned exit ${exit_code} — switching provider"
-            PROVIDER_INDEX=$(( PROVIDER_INDEX + 1 ))
-            rm -f .ralph/aymm-touched-files.log
-            ;;
-    esac
+# --- INCORPORATING ESCALATION LEVEL N: CONTEXT EXPANSION ---
+# (Triggered if loop.sh's tracking array determines a Step N retry is active)
+if [ "$ESCALATION_LEVEL" = "context_expansion" ]; then
+    # Grab historical and upcoming task file states natively via directory sorting
+    LAST_DONE_1=$(ls -t tasks/3_done/*.md 2>/dev/null | sed -n '1p')
+    LAST_DONE_2=$(ls -t tasks/3_done/*.md 2>/dev/null | sed -n '2p')
+    NEXT_QUEUE_1=$(ls tasks/1_queue/*.md 2>/dev/null | sort | sed -n '1p')
+    NEXT_QUEUE_2=$(ls tasks/1_queue/*.md 2>/dev/null | sort | sed -n '2p')
 
-    write_provider_state "${CURRENT_PROVIDER:-exhausted}" "$CURRENT_TASK"
+    EXPANDED_CONTEXT="\n\n=== CONTEXT EXPANSION (DIAGNOSTIC READ-ONLY REFERENCE) ==="
+    [ -n "$LAST_DONE_1" ] && EXPANDED_CONTEXT="$EXPANDED_CONTEXT\n[Completed recently]:\n$(cat "$LAST_DONE_1")"
+    [ -n "$LAST_DONE_2" ] && EXPANDED_CONTEXT="$EXPANDED_CONTEXT\n$(cat "$LAST_DONE_2")"
+    [ -n "$NEXT_QUEUE_1" ] && EXPANDED_CONTEXT="$EXPANDED_CONTEXT\n[Planned next]:\n$(cat "$NEXT_QUEUE_1")"
+    [ -n "$NEXT_QUEUE_2" ] && EXPANDED_CONTEXT="$EXPANDED_CONTEXT\n$(cat "$NEXT_QUEUE_2")"
+    
+    EXECUTION_CONTEXT="$EXECUTION_CONTEXT\n$EXPANDED_CONTEXT"
+fi
 
-    # ── PHASE GATE CHECK ───────────────────────────────────────────────────
-    # Verify if any unchecked task items remain in the current phase file
-    REMAINING_STEPS="$(grep -c '^\- \[ \]' "tasks/active/${CURRENT_TASK}.md" || true)"
-
-    if [[ "$REMAINING_STEPS" -eq 0 ]]; then
-        echo "🎉 Phase ${CURRENT_TASK} completed by free tier. Triggering Claude Phase Gate Review..."
-        
-        # 1. Parse phase testing configurations
-        ADVANCED_TEST="$(awk '/^\*\*Advanced Test Command:\*\*/{print $0}' "tasks/active/${CURRENT_TASK}.md" | sed 's/\*\*Advanced Test Command:\*\* //')"
-        REVIEW_CONSTRAINT="$(awk '/^\*\*Review Constraint:\*\*/{print $0}' "tasks/active/${CURRENT_TASK}.md" | sed 's/\*\*Review Constraint:\*\* //')"
-
-        # 2. Execute advanced test suite
-        if [[ -n "$ADVANCED_TEST" ]]; then
-            echo "Running advanced integration tests: $ADVANCED_TEST"
-            if ! eval "$ADVANCED_TEST" 2> .ralph/phase-test-error.log; then
-                echo "❌ Integration tests failed. Escalating phase to Claude nest for repair."
-                touch .ralph/aymm-escalate.txt
-                break
-            fi
-        fi
-
-        # 3. Execution of single-turn constrained code review via Claude
-        # (Pass the contents of .ralph/aymm-flight-recorder.log and $REVIEW_CONSTRAINT)
-        # If Claude flags a logical flaw (Response != "PHASE_PASSED"), treat as escalation.
-        
-        # On absolute phase verification success, wipe the flight recorder clean for the next phase
-        rm -f .ralph/aymm-flight-recorder.log
-    fi
+# Construct payload and invoke Claude headless
+# (Pipes basic instructions + the tightly scoped step payload)
+echo -e "$EXECUTION_CONTEXT" | claude --model "$MODEL" --effort "$EFFORT" ...
 
 ```
 
 ---
 
-## 3. Highly Constrained System Prompt Wrapper for Claude Phase Reviews
+## 4. Key Advantages over v1
 
-To prevent Claude from wandering off into long execution thoughts or consuming unnecessary tokens during the review, the single-turn call must wrap the context in this strict prompt wrapper:
-
-```markdown
-You are a Senior Systems Architect evaluating a Phase Gate Review within an autonomous framework.
-The code changes applied by free-tier sub-agents have successfully passed local syntax and advanced integration gates.
-
-Evaluate the complete history of modifications documented below for structural flaws or architectural regressions.
-You must strictly adhere to this constraint: <INSERT_REVIEW_CONSTRAINT_VARIABLE>
-
-[CRITICAL DIRECTIVE]
-- If the implementation is structurally sound, respond with exactly one word: PHASE_PASSED
-- If a deep logical error exists, output an XML block explaining the error so the repair sequence can capture it. Do not attempt a full rewrite.
-
-```
-
----
-
-## Why This Implementation is Optimal
-
-* **Aggressive Quota Protection:** Claude remains completely passive while the free providers cycle through granular updates. She only executes a single, highly truncated verification call at the hard boundary of an entire phase milestone.
-* **No Blind Spot Repetition:** If the free tiers fail or hit an integration roadblock, Claude doesn't run a standard guess-and-test approach. The comprehensive `aymm-flight-recorder.log` hands her a diagnostic map of precisely what was modified, how it failed, and what the logs reported across every attempted provider execution.
+1. **Stateless Iterations:** Claude never has to maintain or track project-level index charts. Every iteration receives exactly what it must complete and nothing else, preventing systemic context drift and token drain.
+2. **Native Escalation Sourcing:** Context expansion no longer scans markdown layout tables. It grabs files using standard shell timestamps (`ls -t`) and file lists, keeping escalation lightweight, accurate, and ephemeral.
+3. **Clean Repository History:** The implementation files (`CLAUDE.md`, `loop.sh`, etc.) are hidden outside the workspace. Project repositories remain entirely clean, tracking nothing but actual source code and the clean, linear `tasks/` directory progression.
