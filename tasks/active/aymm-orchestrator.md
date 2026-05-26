@@ -13,11 +13,11 @@
 
 - [x] Step 4: Implement exhaustion STOP — when all providers return 429 or 403 (rate-limited, not task failure) in the same cycle, write `STOP` with message: "All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash aymm.sh\` again." and send ntfy notification if `NTFY_TOPIC` is set — done when: `bash -n aymm-loop.sh` exits 0
 
-- [ ] Step 5: Implement Claude escalation — when `.ralph/aymm-escalate.txt` exists, remove it and exec `bash /workspace/loop.sh`; loop.sh handles Claude invocation, testing, and BLOCKED if Claude also fails — done when: `bash -n aymm-loop.sh` exits 0
+- [x] Step 5: Implement Claude escalation — when `.ralph/aymm-escalate.txt` exists, remove it and exec `bash /workspace/loop.sh`; loop.sh handles Claude invocation, testing, and BLOCKED if Claude also fails — done when: `bash -n aymm-loop.sh` exits 0
 
-- [ ] Step 6: Implement recovery state tracking — write `.ralph/aymm-provider-state.json` after each iteration containing: current provider name, provider index, consecutive failure count, tasks attempted per provider — done when: `bash -n aymm-loop.sh` exits 0; JSON structure is valid (checked with `jq`)
+- [x] Step 6: Implement recovery state tracking — write `.ralph/aymm-provider-state.json` after each iteration containing: current provider name, provider index, consecutive failure count, tasks attempted per provider — done when: `bash -n aymm-loop.sh` exits 0; JSON structure is valid (checked with `jq`)
 
-- [ ] Step 7 (final): Run test command — on pass, commit and close task
+- [x] Step 7 (final): Run test command — on pass, commit and close task
 
 ## Smoke test
 Run `aymm-loop.sh` with all provider keys set to invalid strings. Confirm: Gemini is tried first, fails twice, Mistral is tried next, fails twice, and so on through all four providers; finally `.ralph/aymm-escalate.txt` is written and loop.sh is invoked.

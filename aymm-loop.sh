@@ -101,12 +101,23 @@ write_provider_state() {
     local task="$2"
     local fail_count
     fail_count="$(get_failure_count "$provider" "$task")"
+
+    # Build tasks_attempted_per_provider JSON object
+    local attempted_json="{"
+    local first=true
+    for p in "${PROVIDERS[@]}"; do
+        [[ "$first" == "true" ]] && first=false || attempted_json="${attempted_json},"
+        attempted_json="${attempted_json}\"${p}\": ${TASKS_ATTEMPTED[$p]:-0}"
+    done
+    attempted_json="${attempted_json}}"
+
     cat > ".ralph/aymm-provider-state.json" <<EOF
 {
   "current_provider": "${provider}",
   "provider_index": ${PROVIDER_INDEX},
   "consecutive_failures": ${fail_count},
-  "task": "${task}"
+  "task": "${task}",
+  "tasks_attempted_per_provider": ${attempted_json}
 }
 EOF
 }
@@ -189,6 +200,7 @@ close_task() {
 AUTONOMY="$(read_autonomy)"
 PROVIDER_INDEX=0
 RATE_LIMIT_ADVANCES=0
+declare -A TASKS_ATTEMPTED
 
 init_failure_counters
 
@@ -246,6 +258,8 @@ while [[ ! -f STOP ]]; do
 
     # ── Inner execution loop ─────────────────────────────────────────────────
     echo "Running provider: ${CURRENT_PROVIDER} | Task: ${CURRENT_TASK}"
+
+    TASKS_ATTEMPTED["$CURRENT_PROVIDER"]=$(( ${TASKS_ATTEMPTED["$CURRENT_PROVIDER"]:-0} + 1 ))
 
     exit_code=0
     bash "${WORKDIR}/run_agent_task.sh" --provider="${CURRENT_PROVIDER}" || exit_code=$?
