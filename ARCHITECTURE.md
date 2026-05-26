@@ -21,7 +21,16 @@ is invoked. If a free AI's output passes the test suite, Claude never gets invol
 - `provider-config.sh` — API configuration per provider
 - `prompt-aymm.md` — navigation wrapper for free AI context bundling
 - `test-providers.sh` — live connectivity test for all 4 providers
-- `ralph.sh` / `loop.sh` — unchanged; used as Claude fallback
+- `ralph.sh` — host wrapper for Claude-only mode
+- `loop.sh` — bash-side navigation (picks task from 4-stage pipeline, extracts next step, injects into prompt); Claude fallback
+- `prompt.md` — step executor (~10 lines); bash injects the current step before passing to Claude
+
+## Directory Structure
+Tasks flow through four directories; bash moves files between them, Claude never navigates:
+- `tasks/0_backlog/` — area plans and ideas not yet broken into task files
+- `tasks/1_queue/` — task files waiting to run (add new tasks here)
+- `tasks/2_active/` — the single task currently being worked (loop.sh moves it here)
+- `tasks/3_done/` — archived completed tasks
 
 ## Provider Priority
 1. Gemini 2.5 Flash (GEMINI_API_KEY) — most generous free tier, large context window
@@ -56,7 +65,7 @@ The runner parses these blocks and writes them to disk, then runs the test comma
 
 ## Test Command
 ```bash
-bash -n aymm.sh && bash -n aymm-loop.sh && bash -n run_agent_task.sh && bash -n provider-config.sh
+bash -n loop.sh && bash -n aymm.sh && bash -n aymm-loop.sh && bash -n run_agent_task.sh && bash -n provider-config.sh
 ```
 Bash syntax check — runs after every step, zero API calls, no quota burned during build.
 
