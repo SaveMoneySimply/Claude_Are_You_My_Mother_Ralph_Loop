@@ -149,3 +149,58 @@ my-project/
 ```
 
 See `CLAUDE.md → .md File Architecture` for the full doc conventions.
+
+---
+
+## AYMM — Are You My Mother (Multi-Provider Mode)
+
+AYMM extends Ralph to use free AI providers (Gemini, Mistral, Groq, OpenRouter) before falling back to Claude. Same workflow, lower API cost.
+
+### Required environment variables
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...       # required — Claude fallback and plan mode
+export GEMINI_API_KEY=...                 # optional free provider
+export MISTRAL_API_KEY=...                # optional free provider
+export GROQ_API_KEY=...                   # optional free provider
+export OPENROUTER_API_KEY=...             # optional free provider
+```
+
+At least one free provider key is recommended; without them AYMM behaves identically to Ralph.
+
+### Running AYMM
+
+```bash
+# Breakdown mode: generate task files from plans (uses Claude)
+bash aymm.sh plan
+
+# Execution mode: work through tasks using free providers first
+bash aymm.sh
+```
+
+All other controls (watching progress, stopping) are identical to Ralph — use `.ralph/loop.log`, `cat .ralph/last-task.txt`, and `touch STOP`.
+
+### Escalation — how AYMM picks a provider
+
+Each iteration, AYMM tries providers in priority order: **gemini → mistral → groq → openrouter → Claude**.
+
+| Event | Action |
+|---|---|
+| Step passes | Reset failure counter, stay on current provider |
+| 2 consecutive failures on one provider | Switch to next free provider |
+| Rate-limited (429) or forbidden (403) | Switch to next free provider immediately |
+| All free providers exhausted (non-rate-limit) | Escalate to Claude via `loop.sh` |
+| All free providers rate-limited | Write STOP — wait ~1hr or run `bash ralph.sh` to use Claude now |
+
+Current provider and failure counts are written to `.ralph/aymm-provider-state.json` each iteration.
+
+### When to use `aymm.sh` vs `ralph.sh`
+
+| | `ralph.sh` | `aymm.sh` |
+|---|---|---|
+| Provider | Claude only | Free providers first, Claude as fallback |
+| Cost | Claude API credits | Near-zero for most tasks |
+| Speed | Consistent | Depends on free-tier rate limits |
+| Best for | Deadline-sensitive work, complex tasks | Long-running autonomous work, cost reduction |
+
+Use `ralph.sh` when you need reliability and speed. Use `aymm.sh` when you have time and want to reduce API spend.

@@ -69,5 +69,6 @@ if [ "$WORKSPACE_UID" -gt 0 ] && [ "$(id -u claude)" != "$WORKSPACE_UID" ]; then
     chown -R claude /home/claude
 fi
 
+LOOP="${LOOP_SCRIPT:-loop.sh}"
 exec su -s /bin/bash claude -c \
-    "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && bash /workspace/loop.sh"
+    "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && bash /workspace/${LOOP}"
