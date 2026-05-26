@@ -5,9 +5,9 @@
 
 ## Steps
 
-- [ ] Step 1: Write `aymm-loop.sh` skeleton — source `provider-config.sh`, read `autonomy` setting from `ARCHITECTURE.md`, initialize provider index at 0, initialize per-task failure counters, define main loop structure — done when: `bash -n aymm-loop.sh` exits 0
+- [x] Step 1: Write `aymm-loop.sh` skeleton — source `provider-config.sh`, read `autonomy` setting from `ARCHITECTURE.md`, initialize provider index at 0, initialize per-task failure counters, define main loop structure — done when: `bash -n aymm-loop.sh` exits 0
 
-- [ ] Step 2: Implement inner execution loop — call `run_agent_task.sh --provider=$CURRENT_PROVIDER`, read exit code, handle exit 0 (pass: reset failure counter, git commit, mark step done), handle exit 2 (fail: increment counter), handle exit 429 (rate limit: break to provider switcher) — done when: `bash -n aymm-loop.sh` exits 0; logic reviewed for correctness
+- [x] Step 2: Implement inner execution loop — call `run_agent_task.sh --provider=$CURRENT_PROVIDER`, read exit code, handle exit 0 (pass: reset failure counter, git commit, mark step done), handle exit 2 (fail: increment counter), handle exit 429 (rate limit: break to provider switcher) — done when: `bash -n aymm-loop.sh` exits 0; logic reviewed for correctness
 
 - [ ] Step 3: Implement provider switching — on 2× consecutive failures or exit 429, advance the provider index; if all 4 providers have been tried for the current task, write `.ralph/aymm-escalate.txt` and break to Claude escalation — done when: `bash -n aymm-loop.sh` exits 0
 
