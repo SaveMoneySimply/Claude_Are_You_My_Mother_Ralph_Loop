@@ -37,6 +37,10 @@ ALLOWED_DOMAINS=(
     files.pythonhosted.org
     ntfy.sh
     claude.ai
+    generativelanguage.googleapis.com
+    api.groq.com
+    api.mistral.ai
+    openrouter.ai
 )
 
 for domain in "${ALLOWED_DOMAINS[@]}"; do

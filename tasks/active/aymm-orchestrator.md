@@ -9,9 +9,9 @@
 
 - [x] Step 2: Implement inner execution loop — call `run_agent_task.sh --provider=$CURRENT_PROVIDER`, read exit code, handle exit 0 (pass: reset failure counter, git commit, mark step done), handle exit 2 (fail: increment counter), handle exit 429 (rate limit: break to provider switcher) — done when: `bash -n aymm-loop.sh` exits 0; logic reviewed for correctness
 
-- [ ] Step 3: Implement provider switching — on 2× consecutive failures or exit 429, advance the provider index; if all 4 providers have been tried for the current task, write `.ralph/aymm-escalate.txt` and break to Claude escalation — done when: `bash -n aymm-loop.sh` exits 0
+- [x] Step 3: Implement provider switching — on 2× consecutive failures or exit 429, advance the provider index; if all 4 providers have been tried for the current task, write `.ralph/aymm-escalate.txt` and break to Claude escalation — done when: `bash -n aymm-loop.sh` exits 0
 
-- [ ] Step 4: Implement exhaustion STOP — when all providers return 429 or 403 (rate-limited, not task failure) in the same cycle, write `STOP` with message: "All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash aymm.sh\` again." and send ntfy notification if `NTFY_TOPIC` is set — done when: `bash -n aymm-loop.sh` exits 0
+- [x] Step 4: Implement exhaustion STOP — when all providers return 429 or 403 (rate-limited, not task failure) in the same cycle, write `STOP` with message: "All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash aymm.sh\` again." and send ntfy notification if `NTFY_TOPIC` is set — done when: `bash -n aymm-loop.sh` exits 0
 
 - [ ] Step 5: Implement Claude escalation — when `.ralph/aymm-escalate.txt` exists, remove it and exec `bash /workspace/loop.sh`; loop.sh handles Claude invocation, testing, and BLOCKED if Claude also fails — done when: `bash -n aymm-loop.sh` exits 0
 

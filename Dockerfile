@@ -3,6 +3,12 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+ENV ANTHROPIC_API_KEY=""
+ENV GEMINI_API_KEY=""
+ENV GROQ_API_KEY=""
+ENV MISTRAL_API_KEY=""
+ENV OPENROUTER_API_KEY=""
+
 # System packages: Node 20 setup prereqs + runtime tools
 RUN apt-get update && apt-get install -y \
     ca-certificates \

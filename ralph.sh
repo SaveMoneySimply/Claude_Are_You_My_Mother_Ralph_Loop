@@ -49,6 +49,11 @@ fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
 fi
+PROVIDER_ENV=""
+[ -n "${GEMINI_API_KEY:-}" ]      && PROVIDER_ENV="$PROVIDER_ENV -e GEMINI_API_KEY=${GEMINI_API_KEY}"
+[ -n "${GROQ_API_KEY:-}" ]        && PROVIDER_ENV="$PROVIDER_ENV -e GROQ_API_KEY=${GROQ_API_KEY}"
+[ -n "${MISTRAL_API_KEY:-}" ]     && PROVIDER_ENV="$PROVIDER_ENV -e MISTRAL_API_KEY=${MISTRAL_API_KEY}"
+[ -n "${OPENROUTER_API_KEY:-}" ]  && PROVIDER_ENV="$PROVIDER_ENV -e OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"
 
 # In plan mode, swap prompt.md for prompt-plan.md inside the container
 PROMPT_MOUNT=""
@@ -67,6 +72,7 @@ docker run --rm \
     ${PROMPT_MOUNT} \
     ${AUTH_MOUNT} \
     ${AUTH_ENV} \
+    ${PROVIDER_ENV} \
     -e "NTFY_TOPIC=${NTFY_TOPIC:-}" \
     --cap-add=NET_ADMIN \
     --cap-add=NET_RAW \

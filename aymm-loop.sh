@@ -29,6 +29,30 @@ current_provider() {
     echo "${PROVIDERS[$PROVIDER_INDEX]:-}"
 }
 
+# Advance to the next provider; write STOP or .ralph/aymm-escalate.txt if all exhausted.
+# reason: "rate_limit" (429/403) or "failure" (task error)
+advance_provider() {
+    local task="$1"
+    local reason="${2:-failure}"
+    PROVIDER_INDEX=$(( PROVIDER_INDEX + 1 ))
+    if [[ "$reason" == "rate_limit" ]]; then
+        RATE_LIMIT_ADVANCES=$(( RATE_LIMIT_ADVANCES + 1 ))
+    fi
+    if (( PROVIDER_INDEX >= ${#PROVIDERS[@]} )); then
+        if (( RATE_LIMIT_ADVANCES >= ${#PROVIDERS[@]} )); then
+            local stop_msg
+            stop_msg="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash aymm.sh\` again."
+            echo "$stop_msg" > STOP
+            notify "AYMM: all providers rate-limited" "$stop_msg"
+        else
+            echo "All free providers exhausted for task ${task} — escalating to Claude"
+            touch ".ralph/aymm-escalate.txt"
+        fi
+    else
+        echo "Switched to provider: ${PROVIDERS[$PROVIDER_INDEX]}"
+    fi
+}
+
 # Initialize per-task failure counters file
 init_failure_counters() {
     if [[ ! -f ".ralph/aymm-failure-counters.json" ]]; then
@@ -164,6 +188,7 @@ close_task() {
 
 AUTONOMY="$(read_autonomy)"
 PROVIDER_INDEX=0
+RATE_LIMIT_ADVANCES=0
 
 init_failure_counters
 
@@ -190,10 +215,14 @@ while [[ ! -f STOP ]]; do
 
     # Guard: provider index out of range → all free providers exhausted
     if [[ -z "$CURRENT_PROVIDER" ]]; then
-        # Step 5 placeholder: Claude escalation via aymm-escalate.txt
-        echo "All free providers exhausted for task ${CURRENT_TASK} — escalating to Claude"
-        touch ".ralph/aymm-escalate.txt"
-        # Escalation handled below
+        if (( RATE_LIMIT_ADVANCES >= ${#PROVIDERS[@]} )); then
+            STOP_MSG="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash aymm.sh\` again."
+            echo "$STOP_MSG" > STOP
+            notify "AYMM: all providers rate-limited" "$STOP_MSG"
+        else
+            echo "All free providers exhausted for task ${CURRENT_TASK} — escalating to Claude"
+            touch ".ralph/aymm-escalate.txt"
+        fi
     fi
 
     write_provider_state "${CURRENT_PROVIDER:-exhausted}" "$CURRENT_TASK"
@@ -206,7 +235,6 @@ while [[ ! -f STOP ]]; do
     fi
 
     # ── Ensure task branch exists ────────────────────────────────────────────
-    local current_branch
     current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")"
     if [[ "$current_branch" != "task/${CURRENT_TASK}" ]]; then
         if ! git show-ref --quiet "refs/heads/task/${CURRENT_TASK}"; then
@@ -235,15 +263,24 @@ while [[ ! -f STOP ]]; do
             fi
             ;;
         2)
-            # Task failure: increment counter; switching handled by Step 3
+            # Task failure: increment counter; switch provider after 2 consecutive failures
             increment_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
             fail_count="$(get_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK")"
             echo "Provider ${CURRENT_PROVIDER} failed (count: ${fail_count})"
+            if (( fail_count >= 2 )); then
+                echo "2 consecutive failures on ${CURRENT_PROVIDER} — switching provider"
+                advance_provider "$CURRENT_TASK" "failure"
+            fi
+            ;;
+        3)
+            # Forbidden/exhausted (403): treat as rate-limit exhaustion
+            echo "Provider ${CURRENT_PROVIDER} forbidden/exhausted (403) — switching provider"
+            advance_provider "$CURRENT_TASK" "rate_limit"
             ;;
         429)
-            # Rate limited: break to provider switcher (Step 3)
+            # Rate limited: advance to next provider immediately
             echo "Provider ${CURRENT_PROVIDER} rate-limited (429) — switching provider"
-            PROVIDER_INDEX=$(( PROVIDER_INDEX + 1 ))
+            advance_provider "$CURRENT_TASK" "rate_limit"
             ;;
         *)
             # Unexpected exit: treat as task failure

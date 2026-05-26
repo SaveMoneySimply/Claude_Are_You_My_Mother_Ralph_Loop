@@ -126,7 +126,7 @@ handle_http_status() {
             ;;
         403)
             echo "Error: forbidden (403) — provider may be exhausted" >&2
-            exit 1
+            exit 3
             ;;
         *)
             echo "Error: unexpected HTTP status ${status}" >&2
