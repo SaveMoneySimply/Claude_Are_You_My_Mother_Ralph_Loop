@@ -5,7 +5,7 @@ set -uo pipefail
 
 WORKDIR=/workspace
 cd "$WORKDIR"
-mkdir -p .ralph tasks/active tasks/done
+mkdir -p .ralph tasks/{0_backlog,1_queue,2_active,3_done}
 
 # Step number used to force a split on the next iteration
 FORCE_SPLIT_STEP=50
@@ -80,13 +80,13 @@ load_recovery() {
         RECOVERY_ATTEMPTS=0
         # Read split_depth from task file header (sub-tasks carry this from their creation)
         RECOVERY_SPLIT_DEPTH=$(grep -oP 'Split depth:\s*\K\d+' \
-            "tasks/active/${task}.md" 2>/dev/null | head -1 || echo 0)
+            "tasks/2_active/${task}.md" 2>/dev/null | head -1 || echo 0)
         RECOVERY_PARENT=$(grep -oiP 'Parent task:\s*\K\S+' \
-            "tasks/active/${task}.md" 2>/dev/null | head -1 || echo "")
+            "tasks/2_active/${task}.md" 2>/dev/null | head -1 || echo "")
         RECOVERY_DECL_MODEL=$(grep -oiP '\bModel:(?:\*\*\s*|\s+)\K\w+' \
-            "tasks/active/${task}.md" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]' || echo "sonnet")
+            "tasks/2_active/${task}.md" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]' || echo "sonnet")
         RECOVERY_DECL_EFFORT=$(grep -oiP '\bEffort:(?:\*\*\s*|\s+)\K\w+' \
-            "tasks/active/${task}.md" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]' || echo "high")
+            "tasks/2_active/${task}.md" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]' || echo "high")
     fi
 }
 
@@ -116,30 +116,78 @@ log_recovery() {
         >> .ralph/recovery-log.jsonl
 }
 
+# Pick the current task: use 2_active/ if occupied; else pull first from 1_queue/
+# Prints the task short name (no .md), or "" if nothing available
+pick_task() {
+    local active
+    active=$(ls tasks/2_active/*.md 2>/dev/null | head -1)
+    if [ -n "$active" ]; then
+        basename "$active" .md
+        return
+    fi
+    local queued
+    queued=$(ls tasks/1_queue/*.md 2>/dev/null | head -1)
+    if [ -n "$queued" ]; then
+        mv "$queued" tasks/2_active/
+        basename "$queued" .md
+        return
+    fi
+    echo ""
+}
+
+# Build focused step prompt: prompt.md base + task context + extracted next step
+build_step_prompt() {
+    local task="$1" task_file="$2" next_step="$3"
+    local out=".ralph/prompt-step-${task}.md"
+    {
+        cat prompt.md
+        echo ""
+        echo "---"
+        echo "## Current task: ${task}"
+        echo "Task file: ${task_file}"
+        echo ""
+        echo "### Next step to execute"
+        echo "${next_step}"
+        echo ""
+        echo "### Full task file"
+        cat "${task_file}"
+    } > "$out"
+    echo "$out"
+}
+
 # Build an extended prompt with surrounding task context, returns file path
 build_context_prompt() {
-    local task="$1"
+    local task="$1" task_file="$2" next_step="$3"
     local out=".ralph/prompt-context-${task}.md"
-    cp prompt.md "$out"
-
     {
+        cat prompt.md
+        echo ""
+        echo "---"
+        echo "## Current task: ${task}"
+        echo "Task file: ${task_file}"
+        echo ""
+        echo "### Next step to execute"
+        echo "${next_step}"
+        echo ""
+        echo "### Full task file"
+        cat "${task_file}"
         echo ""
         echo "## Surrounding context (recovery: context expansion)"
         echo ""
         echo "### Recently completed tasks"
-    } >> "$out"
+    } > "$out"
 
     local count=0
     while IFS= read -r -d '' f && [ "$count" -lt 2 ]; do
         { echo ""; echo "#### $(basename "$f" .md)"; head -20 "$f"; } >> "$out"
         count=$((count + 1))
-    done < <(find tasks/done -name '*.md' -printf '%T@ %p\0' 2>/dev/null \
+    done < <(find tasks/3_done -name '*.md' -printf '%T@ %p\0' 2>/dev/null \
         | sort -zrn | cut -z -d' ' -f2-)
 
     {
         echo ""
-        echo "### Upcoming tasks (next unchecked in plan)"
-        grep -m 4 '\- \[ \]' PLAN.md 2>/dev/null || true
+        echo "### Upcoming tasks"
+        ls tasks/1_queue/*.md 2>/dev/null | head -4 | xargs -I{} basename {} .md || true
     } >> "$out"
 
     echo "$out"
@@ -170,7 +218,20 @@ while [ ! -f STOP ]; do
     ITER_ERR=".ralph/iter-${i}-stderr.log"
 
     AUTONOMY=$(read_autonomy)
-    CURRENT_TASK=$(cat .ralph/last-task.txt 2>/dev/null || echo "unknown")
+
+    # ─── pick task via directory state machine ───────────────────────────
+    CURRENT_TASK=$(pick_task)
+    if [ -z "$CURRENT_TASK" ]; then
+        echo "All tasks complete" > STOP
+        break
+    fi
+
+    TASK_FILE="tasks/2_active/${CURRENT_TASK}.md"
+    NEXT_STEP=$(grep -m1 '^- \[ \]' "$TASK_FILE" 2>/dev/null || echo "")
+    if [ -z "$NEXT_STEP" ]; then
+        echo "Warning: ${CURRENT_TASK} has no unchecked steps — skipping (check task file)"
+        continue
+    fi
 
     # ─── determine model/effort from escalation state ───────────────────
 
@@ -179,11 +240,11 @@ while [ ! -f STOP ]; do
     STEP_SPEC=$(get_step_spec \
         "$RECOVERY_DECL_MODEL" "$RECOVERY_DECL_EFFORT" "$RECOVERY_STEP")
 
-    PROMPT_FILE=prompt.md
+    PROMPT_FILE=$(build_step_prompt "$CURRENT_TASK" "$TASK_FILE" "$NEXT_STEP")
 
     if [ "$STEP_SPEC" = "context_expansion" ]; then
         echo "Recovery: context expansion — injecting surrounding task context"
-        PROMPT_FILE=$(build_context_prompt "$CURRENT_TASK")
+        PROMPT_FILE=$(build_context_prompt "$CURRENT_TASK" "$TASK_FILE" "$NEXT_STEP")
         MODEL=opus; EFFORT=max
 
     elif [ "$STEP_SPEC" = "split" ]; then
@@ -233,9 +294,7 @@ while [ ! -f STOP ]; do
 
     # ─── update task tracking ────────────────────────────────────────────
 
-    cp ".ralph/last-task.txt" "$ITER_TASK" 2>/dev/null \
-        || echo "$CURRENT_TASK" > "$ITER_TASK"
-    CURRENT_TASK=$(cat "$ITER_TASK")
+    echo "$CURRENT_TASK" > "$ITER_TASK"
 
     ITER_TOKENS=$(jq -r '.usage.output_tokens // 0' "$ITER_JSON" 2>/dev/null || echo 0)
 
@@ -250,13 +309,14 @@ while [ ! -f STOP ]; do
     STEP_LABEL="${MODEL}+${EFFORT:-none}"
 
     if [ "$STEP_SPEC" = "split" ] && [ "$RESULT" = "pass" ]; then
-        # Split succeeded — sub-tasks are in tasks/active/; clear original recovery state
+        # Split succeeded — sub-tasks are in tasks/1_queue/; clear original recovery state
         log_recovery "$CURRENT_TASK" "split" "split" "pass" "$ITER_TOKENS"
         rm -f ".ralph/${CURRENT_TASK}-recovery.json"
 
     elif [ "$RESULT" = "pass" ]; then
         log_recovery "$CURRENT_TASK" "gate_pass" "$STEP_LABEL" "pass" "$ITER_TOKENS"
         rm -f ".ralph/${CURRENT_TASK}-recovery.json"
+        rm -f ".ralph/prompt-step-${CURRENT_TASK}.md"
         rm -f ".ralph/prompt-context-${CURRENT_TASK}.md"
 
     elif [ "$RESULT" = "fail" ]; then
@@ -277,10 +337,9 @@ while [ ! -f STOP ]; do
 
     # ─── budget check ────────────────────────────────────────────────────
 
-    TASK_MD="tasks/active/${CURRENT_TASK}.md"
     ESTIMATE=0
-    if [ -f "$TASK_MD" ]; then
-        ESTIMATE=$(grep 'Tokens estimated' "$TASK_MD" | grep -oP '\d+' | head -1 || echo 0)
+    if [ -f "$TASK_FILE" ]; then
+        ESTIMATE=$(grep 'Tokens estimated' "$TASK_FILE" | grep -oP '\d+' | head -1 || echo 0)
     fi
 
     TOTAL_TOKENS=0
