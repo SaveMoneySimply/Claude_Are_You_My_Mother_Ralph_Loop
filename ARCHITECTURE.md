@@ -2,7 +2,7 @@
 
 ## What This Is
 An extension of the Ralph Loop that routes autonomous coding tasks through free AI APIs before
-falling back to Claude. Run `bash aymm.sh` instead of `bash ralph.sh` to use free-AI-first execution.
+falling back to Claude. Run `bash ralph.sh aymm` to use free-AI-first execution.
 
 Each task is tried by free-tier providers (Gemini → Mistral → Groq → OpenRouter) before Claude
 is invoked. If a free AI's output passes the test suite, Claude never gets involved.
@@ -15,13 +15,12 @@ is invoked. If a free AI's output passes the test suite, Claude never gets invol
 - Test gate: bash syntax check (see Test Command below)
 
 ## Key Files
-- `aymm.sh` — host wrapper (invoke this instead of ralph.sh)
-- `aymm-loop.sh` — container orchestrator (outer provider loop + inner execution loop)
+- `ralph.sh` — host wrapper; modes: `execute` (Claude only), `plan` (breakdown), `aymm` (free-AI-first)
+- `aymm-loop.sh` — container orchestrator for aymm mode (outer provider loop + inner execution loop)
 - `run_agent_task.sh` — per-provider task runner (context bundle → API → XML parse → test)
 - `provider-config.sh` — API configuration per provider
 - `prompt-aymm.md` — navigation wrapper for free AI context bundling
 - `test-providers.sh` — live connectivity test for all 4 providers
-- `ralph.sh` — host wrapper for Claude-only mode
 - `loop.sh` — bash-side navigation (picks task from 4-stage pipeline, extracts next step, injects into prompt); Claude fallback
 - `prompt.md` — step executor (~10 lines); bash injects the current step before passing to Claude
 
@@ -65,7 +64,7 @@ The runner parses these blocks and writes them to disk, then runs the test comma
 
 ## Test Command
 ```bash
-bash -n loop.sh && bash -n aymm.sh && bash -n aymm-loop.sh && bash -n run_agent_task.sh && bash -n provider-config.sh
+bash -n ralph.sh && bash -n loop.sh && bash -n aymm-loop.sh && bash -n run_agent_task.sh && bash -n provider-config.sh
 ```
 Bash syntax check — runs after every step, zero API calls, no quota burned during build.
 

@@ -5,7 +5,7 @@ set -uo pipefail
 
 WORKDIR=/workspace
 cd "$WORKDIR"
-mkdir -p .ralph tasks/active tasks/done
+mkdir -p .ralph tasks/2_active tasks/3_done
 
 # ---------------------------------------------------------------------------
 # Load provider configuration
@@ -41,7 +41,7 @@ advance_provider() {
     if (( PROVIDER_INDEX >= ${#PROVIDERS[@]} )); then
         if (( RATE_LIMIT_ADVANCES >= ${#PROVIDERS[@]} )); then
             local stop_msg
-            stop_msg="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash aymm.sh\` again."
+            stop_msg="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash ralph.sh aymm\` again."
             echo "$stop_msg" > STOP
             notify "AYMM: all providers rate-limited" "$stop_msg"
         else
@@ -137,7 +137,7 @@ notify() {
 # Mark the first unchecked step as done in the task file
 mark_step_done() {
     local task="$1"
-    local task_file="tasks/active/${task}.md"
+    local task_file="tasks/2_active/${task}.md"
     if [[ ! -f "$task_file" ]]; then
         echo "Warning: task file not found: $task_file" >&2
         return 1
@@ -149,7 +149,7 @@ mark_step_done() {
 # Returns 0 if unchecked steps remain, 1 if the task is complete
 has_remaining_steps() {
     local task="$1"
-    grep -q '^- \[ \]' "tasks/active/${task}.md" 2>/dev/null
+    grep -q '^- \[ \]' "tasks/2_active/${task}.md" 2>/dev/null
 }
 
 # Stage and commit any pending changes
@@ -166,8 +166,8 @@ git_commit_step() {
 close_task() {
     local task="$1"
     local provider="$2"
-    local task_file="tasks/active/${task}.md"
-    local done_file="tasks/done/${task}.md"
+    local task_file="tasks/2_active/${task}.md"
+    local done_file="tasks/3_done/${task}.md"
 
     # Merge task branch if we're on it
     local current_branch
@@ -179,15 +179,7 @@ close_task() {
 
     mv "$task_file" "$done_file"
 
-    # Update active→done links in plan files
-    find plans/ -name "*.md" -exec \
-        sed -i "s|tasks/active/${task}\.md|tasks/done/${task}.md|g" {} \;
-
-    # Tick the checkbox for this task in plan files
-    find plans/ -name "*.md" -exec \
-        sed -i "/\[task\](.*${task}.*)/s/^- \[ \]/- [x]/" {} \;
-
-    echo "| $(date '+%Y-%m-%d') | ${task} | Completed via ${provider} | [task](tasks/done/${task}.md) |" \
+    echo "| $(date '+%Y-%m-%d') | ${task} | Completed via ${provider} | [task](tasks/3_done/${task}.md) |" \
         >> CHANGELOG.md
 
     echo "Task ${task} closed."
@@ -218,7 +210,7 @@ while [[ ! -f STOP ]]; do
     CURRENT_TASK="$(cat .ralph/last-task.txt 2>/dev/null || echo "unknown")"
 
     # Guard: no active task
-    if [[ "$CURRENT_TASK" == "unknown" ]] || [[ ! -f "tasks/active/${CURRENT_TASK}.md" ]]; then
+    if [[ "$CURRENT_TASK" == "unknown" ]] || [[ ! -f "tasks/2_active/${CURRENT_TASK}.md" ]]; then
         echo "No active task found — delegating to loop.sh"
         exec bash "${WORKDIR}/loop.sh"
     fi
@@ -228,7 +220,7 @@ while [[ ! -f STOP ]]; do
     # Guard: provider index out of range → all free providers exhausted
     if [[ -z "$CURRENT_PROVIDER" ]]; then
         if (( RATE_LIMIT_ADVANCES >= ${#PROVIDERS[@]} )); then
-            STOP_MSG="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash aymm.sh\` again."
+            STOP_MSG="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash ralph.sh aymm\` again."
             echo "$STOP_MSG" > STOP
             notify "AYMM: all providers rate-limited" "$STOP_MSG"
             break

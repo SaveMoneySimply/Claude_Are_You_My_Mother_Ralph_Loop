@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Host-side wrapper. Run from project root:
-#   bash ralph.sh        — execution mode (default): works through tasks
-#   bash ralph.sh plan   — breakdown mode: generates task files from plans
+#   bash ralph.sh          — execution mode (default): works through tasks
+#   bash ralph.sh plan     — breakdown mode: generates task files from plans
+#   bash ralph.sh aymm     — multi-provider mode: tries free providers before Claude
 # Requires: docker, and either 'claude login' (subscription) or ANTHROPIC_API_KEY set
 set -euo pipefail
 
@@ -49,20 +50,28 @@ fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
 fi
+
 PROVIDER_ENV=""
 [ -n "${GEMINI_API_KEY:-}" ]      && PROVIDER_ENV="$PROVIDER_ENV -e GEMINI_API_KEY=${GEMINI_API_KEY}"
 [ -n "${GROQ_API_KEY:-}" ]        && PROVIDER_ENV="$PROVIDER_ENV -e GROQ_API_KEY=${GROQ_API_KEY}"
 [ -n "${MISTRAL_API_KEY:-}" ]     && PROVIDER_ENV="$PROVIDER_ENV -e MISTRAL_API_KEY=${MISTRAL_API_KEY}"
 [ -n "${OPENROUTER_API_KEY:-}" ]  && PROVIDER_ENV="$PROVIDER_ENV -e OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"
 
-# In plan mode, swap prompt.md for prompt-plan.md inside the container
 PROMPT_MOUNT=""
-if [ "$MODE" = "plan" ]; then
-    echo "Starting Ralph in breakdown mode (prompt-plan.md). Logs → .ralph/loop.log"
-    PROMPT_MOUNT="-v $(pwd)/prompt-plan.md:/workspace/prompt.md:ro"
-else
-    echo "Starting Ralph in execution mode (prompt.md). Logs → .ralph/loop.log"
-fi
+LOOP_ENV=""
+case "$MODE" in
+    plan)
+        echo "Starting Ralph in breakdown mode (prompt-plan.md). Logs → .ralph/loop.log"
+        PROMPT_MOUNT="-v $(pwd)/prompt-plan.md:/workspace/prompt.md:ro"
+        ;;
+    aymm)
+        echo "Starting Ralph in multi-provider mode (aymm-loop.sh). Logs → .ralph/loop.log"
+        LOOP_ENV="-e LOOP_SCRIPT=aymm-loop.sh"
+        ;;
+    *)
+        echo "Starting Ralph in execution mode (prompt.md). Logs → .ralph/loop.log"
+        ;;
+esac
 echo "To stop: touch STOP"
 echo ""
 
@@ -73,6 +82,7 @@ docker run --rm \
     ${AUTH_MOUNT} \
     ${AUTH_ENV} \
     ${PROVIDER_ENV} \
+    ${LOOP_ENV} \
     -e "NTFY_TOPIC=${NTFY_TOPIC:-}" \
     --cap-add=NET_ADMIN \
     --cap-add=NET_RAW \
