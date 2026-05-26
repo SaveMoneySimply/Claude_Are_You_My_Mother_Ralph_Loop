@@ -172,10 +172,10 @@ At least one free provider key is recommended; without them AYMM behaves identic
 
 ```bash
 # Breakdown mode: generate task files from plans (uses Claude)
-bash aymm.sh plan
+bash ralph.sh plan
 
 # Execution mode: work through tasks using free providers first
-bash aymm.sh
+bash ralph.sh aymm
 ```
 
 All other controls (watching progress, stopping) are identical to Ralph — use `.ralph/loop.log`, `cat .ralph/last-task.txt`, and `touch STOP`.
@@ -192,15 +192,16 @@ Each iteration, AYMM tries providers in priority order: **gemini → mistral →
 | All free providers exhausted (non-rate-limit) | Escalate to Claude via `loop.sh` |
 | All free providers rate-limited | Write STOP — wait ~1hr or run `bash ralph.sh` to use Claude now |
 
+
 Current provider and failure counts are written to `.ralph/aymm-provider-state.json` each iteration.
 
-### When to use `aymm.sh` vs `ralph.sh`
+### When to use `ralph.sh aymm` vs `ralph.sh`
 
-| | `ralph.sh` | `aymm.sh` |
+| | `bash ralph.sh` | `bash ralph.sh aymm` |
 |---|---|---|
 | Provider | Claude only | Free providers first, Claude as fallback |
 | Cost | Claude API credits | Near-zero for most tasks |
 | Speed | Consistent | Depends on free-tier rate limits |
 | Best for | Deadline-sensitive work, complex tasks | Long-running autonomous work, cost reduction |
 
-Use `ralph.sh` when you need reliability and speed. Use `aymm.sh` when you have time and want to reduce API spend.
+Use `bash ralph.sh` when you need reliability and speed. Use `bash ralph.sh aymm` when you have time and want to reduce API spend.
