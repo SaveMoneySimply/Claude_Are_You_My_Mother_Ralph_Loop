@@ -13,25 +13,25 @@ This file lives at the project root and is checked into the repo. Fork this repo
 Four phases. Each ends with **→ CLEAR CONTEXT** — the docs are the state, not the conversation.
 
 **Phase 0 — Project Setup (Interactive)**
-User + Claude create `ARCHITECTURE.md` (stack, test command, key folders, firewall additions). Sketch `PLAN.md` and `plans/` if the major areas are already clear.
+User + Claude create `ARCHITECTURE.md` (stack, test command, key folders, firewall additions). Sketch area plans in `tasks/0_backlog/` if the major areas are already clear.
 → **CLEAR CONTEXT**
 
 **Phase 1 — High-Level Planning (Interactive, Plan Mode)**
-Read `ARCHITECTURE.md`. Produce `PLAN.md` (index) + `plans/*.md` (one per major work area, rough task list per area).
+Read `ARCHITECTURE.md`. Produce area plans in `tasks/0_backlog/` (one per major work area, rough task list per area).
 → **CLEAR CONTEXT**
 
 **Phase 2 — Task Breakdown (Interactive or Automated)**
-For each plan item: create `tasks/active/<name>.md` with explicit, ordered steps.
+For each plan item: create `tasks/1_queue/<name>.md` with explicit, ordered steps.
 - **Interactive:** User + Claude create task files together, then clear context
-- **Automated:** `bash ralph.sh plan` — runs with `prompt-plan.md`; Claude reads sub-plans, generates task files, writes STOP when done
+- **Automated:** `bash ralph.sh plan` — runs with `prompt-plan.md`; Claude reads backlog files, generates task files, writes STOP when done
 → **CLEAR CONTEXT**, then `bash ralph.sh` to start execution
 
 **Phase 3 — Loop (Ralph, Autonomous)**
-Each iteration: navigate `PLAN.md` → pick highest-priority unchecked task → read task file → execute next unchecked step → if last step passes the testing gate → commit → close task → exit. Next iteration continues from here.
+Each iteration: bash picks the next task from `tasks/1_queue/` → moves it to `tasks/2_active/` → extracts the next unchecked step → injects step into prompt → Claude executes it → if last step passes the testing gate → commit → close task (move to `tasks/3_done/`) → exit. Next iteration continues from here.
 
 ## Task File Format
 
-Each file in `tasks/active/` is the effective prompt for the loop when that task is active. Keep steps small and acceptance criteria explicit.
+Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress). Keep steps small and acceptance criteria explicit.
 
 ```markdown
 # Task — <short name>
@@ -90,7 +90,7 @@ When a step fails, `loop.sh` escalates through this ladder automatically. Each l
 - `autonomy: high` → schedule a task split next iteration
 - `autonomy: low` → STOP immediately for human review
 
-**Task splitting**: the original task moves to `tasks/done/` marked `**Split into:** part-1, part-2`. Sub-tasks are created in `tasks/active/` with `**Parent task:**` and `**Split depth:**` headers. Sub-tasks at depth 2 cannot be split further — they go straight to BLOCKED if exhausted.
+**Task splitting**: the original task moves to `tasks/3_done/` marked `**Split into:** part-1, part-2`. Sub-tasks are created in `tasks/1_queue/` with `**Parent task:**` and `**Split depth:**` headers. Sub-tasks at depth 2 cannot be split further — they go straight to BLOCKED if exhausted.
 
 **Recovery log**: every attempt is appended to `.ralph/recovery-log.jsonl` for future analysis and tuning.
 
@@ -114,7 +114,7 @@ git checkout -b task/<name>
 git checkout main && git merge --ff-only task/<name> && git branch -d task/<name>
 ```
 
-State files (`PLAN.md`, `CHANGELOG.md`, `BLOCKED.md`) commit to main directly. One agent, one task — no branch conflicts possible.
+State files (`CHANGELOG.md`, `BLOCKED.md`) commit to main directly. One agent, one task — no branch conflicts possible.
 
 ## .md File Architecture
 
@@ -122,53 +122,39 @@ Consistent doc structure so the loop orients quickly each iteration.
 
 ### Folder structure
 
-- **Project root** holds index files and orientation docs only:
+- **Project root** holds orientation docs and engine files only:
   - `README.md` — what it is, how to run it
   - `ARCHITECTURE.md` — stack, runtime, key folders, deploy topology, test command (**read-only to the agent**)
   - `CHANGELOG.md` — append-only log of completed tasks (date, name, one-line description, links)
-  - `PLAN.md` — thin index pointing at sub-plans in `plans/`
   - `ROUTINES.md` — thin index pointing at routines in `routines/`
   - `TEST.md` — post-deploy and recurring verifications
   - `BLOCKED.md` — tasks the loop couldn't progress, with captured evidence
   - `ARCHITECTURE_REVIEW.md` — proposed changes to ARCHITECTURE.md, awaiting human review
-  - `prompt.md` — navigation wrapper; tells the loop how to read state and pick the next step
-  - `prompt-plan.md` — breakdown mode; generates task files from sub-plans
+  - `prompt.md` — step executor; bash injects the current step before passing to Claude
+  - `prompt-plan.md` — breakdown mode; generates task files from backlog
   - `loop.sh` — the loop runner (inside container)
   - `ralph.sh` — host CLI wrapper
 
-- **`plans/`** — one .md per major work area. `PLAN.md` at root just lists them with status.
+- **`tasks/0_backlog/`** — area plans and ideas not yet broken into task files
+- **`tasks/1_queue/`** — task files waiting to be picked up by the loop
+- **`tasks/2_active/`** — the single task currently being worked (bash moves it here)
+- **`tasks/3_done/`** — archived completed tasks
 - **`routines/`** — recurring operational processes (e.g. data syncs, release steps).
 - **`reference/`** — background research and external context.
-- **`tasks/active/`** — task files currently being worked
-- **`tasks/done/`** — archived completed tasks
 - **`_archive/`** — superseded docs kept for reference
 
-### How plans and tasks connect
+### Task pipeline
 
-- A **plan** (`plans/*.md`) holds a checklist of tasks for that work area
-- A **task** (`tasks/active/*.md`) is one of those items being actively worked
-- Each plan checkbox links to its task file:
+Tasks flow through four directories driven entirely by bash — the agent never needs to navigate:
 
-```
-- [ ] Fix auth middleware — [task](../tasks/active/fix-auth-middleware.md)
-- [x] Add email validation — [done](../tasks/done/add-email-validation.md)
-```
-
-When a task is complete and archived, update the link (`active/` → `done/`) and check the box.
-
-### Per-task workflow
-
-1. **Create** `tasks/active/<name>.md` — model, effort, token estimate, steps, smoke test
-2. **Link from the plan** — update the matching checkbox in `plans/<plan>.md` to point at the task file
-3. **Loop executes** steps one at a time, marking each complete
-4. **Testing gate passes** (see Testing Gate):
-   - Move file from `tasks/active/` to `tasks/done/`
-   - Update the plan link and check the box
-   - Append entry to `CHANGELOG.md`
-   - Sweep related docs:
-     - `ARCHITECTURE.md` — **never edit directly**; write proposed changes to `ARCHITECTURE_REVIEW.md` and STOP
-     - `PLAN.md` — if a sub-plan is now fully complete
-     - `routines/` — if operational behavior changed
+1. **Create** `tasks/1_queue/<name>.md` — model, effort, token estimate, steps, smoke test
+2. **Loop picks it up** — bash moves it to `tasks/2_active/`, extracts the next unchecked step, injects it into the prompt
+3. **Agent executes the step**, marks it `[x]` in the task file, writes pass/fail
+4. **On final-step pass**:
+   - Agent commits, moves file to `tasks/3_done/`
+   - Agent appends entry to `CHANGELOG.md`
+   - If `ARCHITECTURE.md` needs updating: write proposal to `ARCHITECTURE_REVIEW.md` and STOP
+   - If operational behavior changed: sweep `routines/`
 
 ### How TEST.md works
 
@@ -187,30 +173,29 @@ Ralph is a `while` loop that runs Claude Code headless against a prompt file, on
 
 ```bash
 while [ ! -f STOP ]; do
-  # Read model and effort from the current task header
-  TASK=$(cat .ralph/last-task.txt 2>/dev/null || echo "")
-  MODEL=sonnet; EFFORT=high
-  if [ -f "tasks/active/${TASK}.md" ]; then
-    MODEL=$(grep -oiP '(?<=Model:\s{0,5}|\*\*Model:\*\*\s{0,5})\w+' \
-      "tasks/active/${TASK}.md" | head -1 | tr '[:upper:]' '[:lower:]')
-    EFFORT=$(grep -oiP '(?<=Effort:\s{0,5}|\*\*Effort:\*\*\s{0,5})\w+' \
-      "tasks/active/${TASK}.md" | head -1 | tr '[:upper:]' '[:lower:]')
-  fi
+  # Bash navigates — pick task, extract next step
+  TASK=$(pick_task)          # pulls from 1_queue/ → 2_active/ if needed
+  TASK_FILE="tasks/2_active/${TASK}.md"
+  NEXT_STEP=$(grep -m1 '^- \[ \]' "$TASK_FILE")
 
-  # Build invocation — haiku doesn't support --effort
-  CMD="claude --model ${MODEL:-sonnet}"
-  [ "${MODEL:-sonnet}" != "haiku" ] && CMD="$CMD --effort ${EFFORT:-high}"
-  CMD="$CMD --bare -p --output-format json --dangerously-skip-permissions"
+  # Read model/effort from task header
+  MODEL=$(grep -oiP '\bModel:...\K\w+' "$TASK_FILE" | head -1)
+  EFFORT=$(grep -oiP '\bEffort:...\K\w+' "$TASK_FILE" | head -1)
 
-  cat prompt.md | $CMD > ".ralph/iter-${i}.json" 2>".ralph/iter-${i}-stderr.log"
+  # Build focused prompt: prompt.md + task context + next step (see build_step_prompt)
+  PROMPT=$(build_step_prompt "$TASK" "$TASK_FILE" "$NEXT_STEP")
+
+  claude --model "$MODEL" --effort "$EFFORT" \
+    -p --output-format json --dangerously-skip-permissions \
+    < "$PROMPT" > ".ralph/iter-${i}.json"
 
   # Budget check and STOP logic — see loop.sh source
 done
 ```
 
-### prompt.md — navigation wrapper
+### prompt.md — step executor
 
-Lives at project root. Under ~30 lines — re-read every iteration. Tells Claude: read state files, find the next unchecked step in the highest-priority task, execute it, write `.ralph/last-task.txt`. Ships with the template repo — edit only if your project needs custom navigation logic.
+Lives at project root. ~10 lines. Bash injects the current step below it before passing to Claude. Claude only sees: instructions for executing one step + the step itself + the full task file for context. No navigation logic — bash handles that entirely.
 
 ### State files
 
@@ -218,17 +203,17 @@ Lives at project root. Under ~30 lines — re-read every iteration. Tells Claude
 |---|---|---|
 | `CLAUDE.md` | Loop operating manual (chmod 0444) | human — agent reads |
 | `ARCHITECTURE.md` | Project facts (chmod 0444) | human — agent reads, proposes changes via review |
-| `PLAN.md` | Sub-plan index + priority order | shared |
-| `plans/*.md` | Each area's task checklist | shared |
-| `tasks/active/*.md` | Task files with steps, model, effort, estimates | agent |
-| `tasks/done/*.md` | Archived completed tasks | agent |
+| `tasks/0_backlog/*.md` | Area plans and ideas not yet broken into tasks | human |
+| `tasks/1_queue/*.md` | Task files waiting to run | human / agent |
+| `tasks/2_active/*.md` | The single task currently being worked (bash moves it here) | bash / agent |
+| `tasks/3_done/*.md` | Archived completed tasks | agent |
 | `CHANGELOG.md` | Append-only log | agent |
 | `BLOCKED.md` | Tasks the agent couldn't progress | agent |
 | `ARCHITECTURE_REVIEW.md` | Proposed ARCHITECTURE.md changes | agent writes, human reviews |
 | `TEST.md` | Post-deploy + recurring verifications | shared |
 | `STOP` | Loop exit sentinel; contents = notification body | either |
-| `.ralph/last-task.txt` | Current task short name (written by agent each iteration) | agent |
 | `.ralph/iter-N.json` | Per-iteration JSON output | agent |
+| `.ralph/prompt-step-<task>.md` | Focused prompt built by bash each iteration | bash |
 
 ### Usage budget
 
@@ -246,7 +231,7 @@ Set `NTFY_TOPIC` in your shell profile (e.g. `ralph-matt-7a3k`). The loop hits `
 
 ## Testing Gate
 
-No task moves to `tasks/done/` until the gate passes.
+No task moves to `tasks/3_done/` until the gate passes.
 
 ### What "pass" means
 
@@ -264,7 +249,7 @@ Gate runs automatically before move-to-done:
 
 1. First failure → try one targeted fix, re-run
 2. Second failure → try a different fix, re-run
-3. Third failure → move to `BLOCKED.md` (link to task .md + full failing output + what was tried). End the iteration.
+3. Third failure → move task to `BLOCKED.md` (link to task .md + full failing output + what was tried), move file to `tasks/3_done/`. End the iteration.
 
 `Attempts:` in the task header tracks this across iterations.
 
