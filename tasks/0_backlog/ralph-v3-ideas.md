@@ -1,39 +1,41 @@
 # Ralph v3 — Ideas Backlog
 
-Items deferred from the v2 plan. Not scheduled — collect here until there's enough to warrant a v3 planning session.
+Items deferred from v2/AYMM. Not scheduled — collect here until there's enough to warrant a planning session.
 
-## Global Engine Install (Dual-Volume Mount)
+---
 
-From GeminiConvo2.md. Engine lives at `~/tools/ralph`, mounted read-only as `/engine` into any project's container. Project workspace mounted separately as `/workspace`.
+## ✅ Already built
 
-**When to do it:** After v2 is stable and ralph is being pointed at real external projects. Extracting a stable v2 is much cleaner than extracting a half-finished v1.
+**Phase Reviews (Claude at phase boundaries)**
+`run_phase_review()` in `aymm-loop.sh` — Claude writes a review to `handoffs/phase<N>-review.md` when all tasks in a phase complete. Review is injected as context into the next phase.
 
-**What changes:**
-- `ralph.sh` moves to `~/tools/ralph/ralph.sh` (installed globally, run from any project dir)
-- Container gets two mounts: `-v ~/tools/ralph:/engine:ro -v $(pwd):/workspace:rw`
-- Engine scripts reference `/engine/` not `/workspace/`
-- Project repos become clean: just `ARCHITECTURE.md` + `tasks/` + project source
+**Failure history passed to next provider**
+`test-log.jsonl` records every attempt (provider, response, test error). Each provider receives the full failure history for the current task so it can learn from prior attempts.
 
-## Phase Gate Reviews (Claude at Task Boundaries)
+**Error feedback loop**
+Failed test output is injected back into the same provider's retry prompt. Provider gets 3 attempts (Gemini/Groq), 2 (Mistral), 1 (OpenRouter) before switching.
 
-From GeminiConvo.md. After all steps in a task complete, pause and do one constrained single-turn Claude review before closing the task. Free providers can run all steps; Claude only reviews at the boundary.
+---
 
-**The prompt constraint:** "Reply EXACTLY with PHASE_PASSED or provide an error block. Do not refactor."
+## Open — AYMM provider tuning
 
-**Tradeoff:** Free providers may build on a broken step 2 for steps 3-4. Phase gate catches it but the repair may be larger. Worth testing once we have real free-provider execution data.
+**OpenRouter model rotation**
+If one `:free` model hits its quota, try the next free model before giving up. Each model has its own separate quota on OpenRouter. Would add `provider_fallback_models()` to `provider-config.sh`. Low priority — do after basic loop proves out.
 
-## Flight Recorder Logging
+**Extend free quota via direct APIs**
+Multiple paths: (1) multiple OpenRouter accounts, each with its own free quota; (2) go direct to each company's free API (DeepSeek, Poolside, NVIDIA) for more generous quotas than OpenRouter-routed versions. Add best direct APIs as extra providers in the chain if rate limits become a problem.
 
-From GeminiConvo.md. Log each step's file touches and test errors to `.ralph/aymm-flight-recorder.log`. Gives Claude a diagnostic map when it escalates — instead of starting blind, it sees exactly what was tried, what files changed, and what the errors were.
+**Sleep-and-retry on full rate limit exhaustion**
+Currently when all providers are rate-limited, the loop writes STOP and exits. Alternative: sleep 1hr, reset provider index, retry automatically. Keeps AYMM running overnight without manual intervention. Add a max-retry count to prevent infinite loops.
 
-**Low effort, high value.** Changes to `run_agent_task.sh` and `aymm-loop.sh` only.
+**Cooldown detection (429 vs quota blown)**
+HTTP 429 = temporary rate limit (resets in minutes). HTTP 403/quota = daily limit (resets in hours). Currently both advance the provider immediately. On 429, could sleep 60s and retry the same provider before advancing. Only advance on true quota exhaustion.
 
-## Sleep-and-Retry on Rate Limit Exhaustion
+---
 
-Currently when all 4 free providers are rate-limited, `aymm-loop.sh` writes STOP and exits. The original Gemini proposal had `sleep 3600` + reset provider index and retry.
+## Open — Core engine
 
-**Addition:** Instead of STOP, sleep 1hr and restart the provider cycle. Keeps AYMM running overnight without manual intervention. Add a max-retry count to prevent infinite sleep loops.
+**Global engine install (dual-volume mount)**
+Engine lives at `~/tools/ralph`, mounted read-only as `/engine` into any project's container. Project workspace mounted separately as `/workspace`. `ralph.sh` moves to `~/tools/ralph/ralph.sh` — installed globally, run from any project dir. Project repos become clean: just `ARCHITECTURE.md` + `tasks/` + project source.
 
-## Cooldown Detection (Distinguish 429 from Quota Blown)
-
-HTTP 429 = temporary rate limit (resets in minutes). HTTP 403/quota = daily limit (resets in hours). Currently both advance the provider. Could instead: on 429, sleep 60s and retry the same provider before advancing. Only advance on quota exhaustion.
+**When to do it:** After AYMM is stable and ralph is being pointed at real external projects.
