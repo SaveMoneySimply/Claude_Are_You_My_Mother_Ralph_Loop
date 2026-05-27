@@ -4,7 +4,7 @@
 **Test command:** test -f hello.txt && echo "pass" || echo "fail"
 
 ## Steps
-- [ ] Step 1: Create a file called `hello.txt` in the project root containing exactly the text `hello`. — done when: `test -f hello.txt` exits 0.
+- [x] Step 1: Create a file called `hello.txt` in the project root containing exactly the text `hello`. — done when: `test -f hello.txt` exits 0.
 
 ## Smoke test
 Open `hello.txt` and confirm it contains "hello".
