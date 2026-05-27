@@ -382,16 +382,9 @@ while [[ ! -f STOP ]]; do
             fi
             ;;
         100)
-            # Rate limited (429): first occurrence sleeps 60s and retries; second consecutive advances
-            COOLDOWN_COUNT["$CURRENT_PROVIDER"]=$(( ${COOLDOWN_COUNT["$CURRENT_PROVIDER"]:-0} + 1 ))
-            if (( ${COOLDOWN_COUNT["$CURRENT_PROVIDER"]} == 1 )); then
-                echo "Provider ${CURRENT_PROVIDER} rate-limited (429) — sleeping 60s before retry"
-                sleep 60
-            else
-                echo "Provider ${CURRENT_PROVIDER} rate-limited (429) twice — switching provider"
-                COOLDOWN_COUNT["$CURRENT_PROVIDER"]=0
-                advance_provider "$CURRENT_TASK" "rate_limit"
-            fi
+            # Rate limited (429): immediately advance to next provider
+            echo "Provider ${CURRENT_PROVIDER} rate-limited (429) — switching provider"
+            advance_provider "$CURRENT_TASK" "rate_limit"
             ;;
         101)
             # Forbidden/exhausted (403): treat as rate-limit exhaustion
