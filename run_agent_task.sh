@@ -310,12 +310,31 @@ run_test_command() {
         return 2
     fi
 
+    local error_log="${SCRIPT_DIR}/.ralph/last-test-error.txt"
+    local test_log="${SCRIPT_DIR}/.ralph/test-log.jsonl"
+    local outcome output
+
     echo "Running test: $test_cmd"
-    if eval "$test_cmd"; then
-        return 0
+    if output="$(eval "$test_cmd" 2>&1)"; then
+        outcome="pass"
+        rm -f "$error_log"
+        echo "$output"
     else
-        return 2
+        outcome="fail"
+        printf '%s' "$output" > "$error_log"
+        echo "$output"
     fi
+
+    printf '%s\n' "$(jq -n \
+        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg task "$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null)" \
+        --arg provider "${PROVIDER}" \
+        --arg outcome "$outcome" \
+        --arg output "$output" \
+        '{ts:$ts, task:$task, provider:$provider, outcome:$outcome, output:$output}')" \
+        >> "$test_log"
+
+    [[ "$outcome" == "pass" ]] && return 0 || return 2
 }
 
 # ---------------------------------------------------------------------------
