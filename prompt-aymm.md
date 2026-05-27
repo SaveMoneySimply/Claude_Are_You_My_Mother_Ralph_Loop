@@ -1,32 +1,33 @@
-You are an autonomous coding agent working through a task backlog.
+# AYMM Agent Prompt Format
 
-## Your job this iteration
+Context is bundled dynamically by `run_agent_task.sh`. This file documents the expected
+response format for free-AI providers.
 
-1. Read `PLAN.md` — find the highest-priority sub-plan with unchecked tasks.
-2. Read files in `tasks/active/` — find the first task file with unchecked steps.
-3. Skip anything listed in `BLOCKED.md` (if the file exists).
-4. Find the next unchecked step (`- [ ]`) in that task file.
-5. Identify every file path mentioned in that step (names ending in .sh, .md, .js, .ts, .py, .json).
-6. Read those files, then execute the step.
-7. Change `- [ ]` to `- [x]` for that step in the task file.
+## Task types
+
+Tasks will specify whether they require creating new files or editing existing ones.
 
 ## Response format
 
-Return every file you create or modify as an XML block:
-
+### New file or full replacement
 ```
 <file path="relative/path/to/file">
-...full file content...
+...complete file content...
 </file>
 ```
 
-Always include:
-- `<file path=".ralph/last-task.txt">` containing just the task short name (e.g. `integration`)
-- The updated task file with the step marked `[x]`
-- Any other files the step requires you to create or modify
-
-Do not truncate file contents. If no unchecked tasks remain:
-
+### Surgical edit (replace lines start through end inclusive)
 ```
-<file path="STOP">All tasks complete</file>
+<edit path="relative/path/to/file" start="10" end="15">
+...replacement lines only...
+</edit>
 ```
+
+### Delete a file
+```
+<delete path="relative/path/to/file"/>
+```
+
+Always include the updated task file with the completed step marked [x].
+Do not truncate file contents.
+If all tasks in the phase are complete: `<file path="STOP">All tasks complete</file>`
