@@ -264,39 +264,13 @@ parse_and_apply_response() {
         return 1
     fi
 
-    # Write text content to a temp file for perl to process
     local tmp_text
     tmp_text="$(mktemp /tmp/aymm-text-XXXXXX.txt)"
     printf '%s' "$text_content" > "$tmp_text"
-
-    # Extract <file path="...">...</file> blocks and apply them
-    local files_written=0
-    local fpath content full_path
-
-    while IFS= read -r -d $'\x00' block; do
-        # Extract path from opening tag
-        fpath="$(echo "$block" | head -1 | grep -oE 'path="[^"]+"' | sed 's/path="\(.*\)"/\1/')"
-        [[ -z "$fpath" ]] && continue
-
-        # Strip opening and closing tags to get content
-        content="$(echo "$block" | tail -n +2 | head -n -1)"
-
-        # Write file creating parent dirs as needed
-        full_path="${SCRIPT_DIR}/${fpath}"
-        mkdir -p "$(dirname "$full_path")"
-        printf '%s\n' "$content" > "$full_path"
-        echo "Wrote: $fpath"
-        files_written=$(( files_written + 1 ))
-    done < <(perl -0777 -ne 'while (/<file\s[^>]*>.*?<\/file>/gs) { print $&, "\x00" }' "$tmp_text")
-
+    bash "${SCRIPT_DIR}/apply_changes.sh" "$tmp_text" "$SCRIPT_DIR"
+    local rc=$?
     rm -f "$tmp_text"
-
-    if [[ "$files_written" -eq 0 ]]; then
-        echo "Warning: no file blocks found in response" >&2
-        return 1
-    fi
-
-    return 0
+    return $rc
 }
 
 # ---------------------------------------------------------------------------
