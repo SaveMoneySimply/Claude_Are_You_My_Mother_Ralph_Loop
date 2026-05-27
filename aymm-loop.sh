@@ -40,10 +40,20 @@ advance_provider() {
     fi
     if (( PROVIDER_INDEX >= ${#PROVIDERS[@]} )); then
         if (( RATE_LIMIT_ADVANCES >= ${#PROVIDERS[@]} )); then
-            local stop_msg
-            stop_msg="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash ralph.sh aymm\` again."
-            echo "$stop_msg" > STOP
-            notify "AYMM: all providers rate-limited" "$stop_msg"
+            RATE_LIMIT_SLEEP_COUNT=$(( RATE_LIMIT_SLEEP_COUNT + 1 ))
+            if (( RATE_LIMIT_SLEEP_COUNT >= 3 )); then
+                local stop_msg
+                stop_msg="All free providers rate-limited after ${RATE_LIMIT_SLEEP_COUNT} retries. Run \`bash ralph.sh\` to continue with Claude now."
+                echo "$stop_msg" > STOP
+                notify "AYMM: all providers rate-limited" "$stop_msg"
+            else
+                local sleep_msg="All free providers rate-limited — retrying in 1hr (attempt ${RATE_LIMIT_SLEEP_COUNT}/3)"
+                echo "All providers rate-limited — sleeping 1hr then retrying" | tee -a ".ralph/loop.log"
+                notify "AYMM: all providers rate-limited" "$sleep_msg"
+                sleep 3600
+                PROVIDER_INDEX=0
+                RATE_LIMIT_ADVANCES=0
+            fi
         else
             echo "All free providers exhausted for task ${task} — escalating to Claude"
             touch ".ralph/aymm-escalate.txt"
@@ -261,6 +271,7 @@ close_task() {
 AUTONOMY="$(read_autonomy)"
 PROVIDER_INDEX=0
 RATE_LIMIT_ADVANCES=0
+RATE_LIMIT_SLEEP_COUNT=0
 declare -A TASKS_ATTEMPTED
 
 init_failure_counters
@@ -289,10 +300,20 @@ while [[ ! -f STOP ]]; do
     # Guard: provider index out of range → all free providers exhausted
     if [[ -z "$CURRENT_PROVIDER" ]]; then
         if (( RATE_LIMIT_ADVANCES >= ${#PROVIDERS[@]} )); then
-            STOP_MSG="All free providers exhausted. Run \`bash ralph.sh\` to continue with Claude now, or wait ~1hr and run \`bash ralph.sh aymm\` again."
-            echo "$STOP_MSG" > STOP
-            notify "AYMM: all providers rate-limited" "$STOP_MSG"
-            break
+            RATE_LIMIT_SLEEP_COUNT=$(( RATE_LIMIT_SLEEP_COUNT + 1 ))
+            if (( RATE_LIMIT_SLEEP_COUNT >= 3 )); then
+                STOP_MSG="All free providers rate-limited after ${RATE_LIMIT_SLEEP_COUNT} retries. Run \`bash ralph.sh\` to continue with Claude now."
+                echo "$STOP_MSG" > STOP
+                notify "AYMM: all providers rate-limited" "$STOP_MSG"
+                break
+            else
+                SLEEP_MSG="All free providers rate-limited — retrying in 1hr (attempt ${RATE_LIMIT_SLEEP_COUNT}/3)"
+                echo "All providers rate-limited — sleeping 1hr then retrying" | tee -a ".ralph/loop.log"
+                notify "AYMM: all providers rate-limited" "$SLEEP_MSG"
+                sleep 3600
+                PROVIDER_INDEX=0
+                RATE_LIMIT_ADVANCES=0
+            fi
         else
             echo "All free providers exhausted for task ${CURRENT_TASK} — escalating to Claude"
             touch ".ralph/aymm-escalate.txt"
