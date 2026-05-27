@@ -25,7 +25,7 @@ provider_model() {
         gemini)      echo "gemini-2.5-flash" ;;
         mistral)     echo "codestral-latest" ;;
         groq)        echo "llama-3.3-70b-versatile" ;;
-        openrouter)  echo "mistralai/mistral-7b-instruct:free" ;;
+        openrouter)  echo "poolside/laguna-m.1:free" ;;
         *)           echo "" ;;
     esac
 }
