@@ -2,7 +2,7 @@
 # Provider configuration for AYMM multi-provider loop.
 # Source this file to get PROVIDERS array and per-provider config functions.
 
-PROVIDERS=(gemini mistral groq openrouter)
+PROVIDERS=(gemini groq mistral openrouter)
 
 # Per-provider configuration.
 # Usage: provider_api_url <provider>
@@ -23,7 +23,7 @@ provider_api_url() {
 provider_model() {
     case "$1" in
         gemini)      echo "gemini-2.5-flash" ;;
-        mistral)     echo "mistral-large-latest" ;;
+        mistral)     echo "codestral-latest" ;;
         groq)        echo "llama-3.3-70b-versatile" ;;
         openrouter)  echo "mistralai/mistral-7b-instruct:free" ;;
         *)           echo "" ;;
@@ -37,6 +37,18 @@ provider_api_key_var() {
         groq)        echo "GROQ_API_KEY" ;;
         openrouter)  echo "OPENROUTER_API_KEY" ;;
         *)           echo "" ;;
+    esac
+}
+
+# Max consecutive failures before switching to the next provider.
+# Lower = conserve scarce quota; higher = give the model more self-correction chances.
+provider_max_attempts() {
+    case "$1" in
+        gemini)      echo 3 ;;
+        groq)        echo 3 ;;
+        mistral)     echo 2 ;;
+        openrouter)  echo 1 ;;
+        *)           echo 3 ;;
     esac
 }
 
