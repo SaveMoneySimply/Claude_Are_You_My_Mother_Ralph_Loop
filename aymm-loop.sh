@@ -365,6 +365,7 @@ while [[ ! -f STOP ]]; do
             git_commit_step "$CURRENT_TASK" "$CURRENT_PROVIDER"
             reset_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
             COOLDOWN_COUNT["$CURRENT_PROVIDER"]=0
+            mark_step_done "$CURRENT_TASK"
             echo "Provider ${CURRENT_PROVIDER} succeeded on task ${CURRENT_TASK}"
             if ! has_remaining_steps "$CURRENT_TASK"; then
                 close_task "$CURRENT_TASK" "$CURRENT_PROVIDER"
