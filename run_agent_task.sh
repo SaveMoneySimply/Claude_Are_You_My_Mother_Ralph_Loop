@@ -85,8 +85,51 @@ bundle_context() {
     local task_content
     task_content="$(cat "$task_file")"
 
+    # Project overview from ARCHITECTURE.md (everything before ## Directory Structure)
+    local arch_overview=""
+    if [[ -f "${SCRIPT_DIR}/ARCHITECTURE.md" ]]; then
+        arch_overview="$(awk '/^## Directory/{exit} {print}' "${SCRIPT_DIR}/ARCHITECTURE.md")"
+    fi
+
+    # Phase tasks — all tasks across all four directories with the same phase prefix
+    local phase="${task_name%%-*}"
+    local phase_tasks=""
+    if [[ "$phase" =~ ^phase[0-9]+ ]]; then
+        while IFS= read -r f; do
+            [[ -f "$f" ]] || continue
+            phase_tasks+="### $(basename "$f")"$'\n'
+            phase_tasks+="$(cat "$f")"$'\n\n'
+        done < <(find "${SCRIPT_DIR}/tasks/0_backlog" "${SCRIPT_DIR}/tasks/1_queue" \
+                      "${SCRIPT_DIR}/tasks/2_active" "${SCRIPT_DIR}/tasks/3_done" \
+                      -name "${phase}-*.md" 2>/dev/null | sort)
+    fi
+
+    # Previous phase review (phase N-1 only)
+    local prev_review=""
+    local phase_num="${phase#phase}"
+    if [[ "$phase_num" =~ ^[0-9]+$ ]] && (( phase_num > 1 )); then
+        local prev_file="${SCRIPT_DIR}/handoffs/phase$(( phase_num - 1 ))-review.md"
+        [[ -f "$prev_file" ]] && prev_review="$(cat "$prev_file")"
+    fi
+
     local prompt=""
     prompt="${prompt}You are an autonomous coding agent. Your task is described below."$'\n\n'
+
+    if [[ -n "$arch_overview" ]]; then
+        prompt="${prompt}## Project overview"$'\n\n'
+        prompt="${prompt}${arch_overview}"$'\n\n'
+    fi
+
+    if [[ -n "$prev_review" ]]; then
+        prompt="${prompt}## Previous phase review"$'\n\n'
+        prompt="${prompt}${prev_review}"$'\n\n'
+    fi
+
+    if [[ -n "$phase_tasks" ]]; then
+        prompt="${prompt}## Phase task overview"$'\n\n'
+        prompt="${prompt}${phase_tasks}"$'\n\n'
+    fi
+
     prompt="${prompt}## Current task step"$'\n\n'
     prompt="${prompt}${next_step}"$'\n\n'
     prompt="${prompt}## Task context"$'\n\n'
