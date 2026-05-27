@@ -300,12 +300,20 @@ run_test_command() {
         return 2
     fi
 
-    # Extract test command from ARCHITECTURE.md (block under ## Test Command)
-    local test_cmd
-    test_cmd="$(awk '/^## Test Command/{found=1; next} found && /^```/{found=2; next} found==2 && /^```/{exit} found==2{print}' "$arch_file" | head -1)"
+    # Extract test command: task file first, fall back to ARCHITECTURE.md
+    local test_cmd=""
+    local task_name
+    task_name="$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null || echo "")"
+    local task_file="${SCRIPT_DIR}/tasks/2_active/${task_name}.md"
+    if [[ -n "$task_name" && -f "$task_file" ]]; then
+        test_cmd="$(grep -oP '(?<=\*\*Test command:\*\* ).*' "$task_file" | head -1 || true)"
+    fi
+    if [[ -z "$test_cmd" ]]; then
+        test_cmd="$(awk '/^## Test Command/{found=1; next} found && /^```/{found=2; next} found==2 && /^```/{exit} found==2{print}' "$arch_file" | head -1)"
+    fi
 
     if [[ -z "$test_cmd" ]]; then
-        echo "Error: could not find test command in ARCHITECTURE.md" >&2
+        echo "Error: could not find test command in task file or ARCHITECTURE.md" >&2
         return 2
     fi
 
