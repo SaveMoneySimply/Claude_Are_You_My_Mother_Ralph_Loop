@@ -343,9 +343,13 @@ run_test_command() {
         --arg output "$output" \
         --arg response "$response" \
         '{ts:$ts, task:$task, provider:$provider, outcome:$outcome, output:$output, response:$response}')" \
-        >> "$test_log"
+        >> "$test_log" || true
 
-    [[ "$outcome" == "pass" ]] && return 0 || return 2
+    if [[ "$outcome" == "pass" ]]; then
+        return 0
+    else
+        return 2
+    fi
 }
 
 # ---------------------------------------------------------------------------
