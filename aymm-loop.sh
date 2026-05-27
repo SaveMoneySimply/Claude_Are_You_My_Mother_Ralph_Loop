@@ -289,10 +289,18 @@ while [[ ! -f STOP ]]; do
 
     CURRENT_TASK="$(cat .ralph/last-task.txt 2>/dev/null || echo "unknown")"
 
-    # Guard: no active task
+    # Guard: no active task — pick from queue before falling back to Claude
     if [[ "$CURRENT_TASK" == "unknown" ]] || [[ ! -f "tasks/2_active/${CURRENT_TASK}.md" ]]; then
-        echo "No active task found — delegating to loop.sh"
-        exec bash "${WORKDIR}/loop.sh"
+        next_task="$(ls tasks/1_queue/*.md 2>/dev/null | sort | head -1 || true)"
+        if [[ -n "$next_task" ]]; then
+            CURRENT_TASK="$(basename "$next_task" .md)"
+            mv "$next_task" "tasks/2_active/${CURRENT_TASK}.md"
+            echo "$CURRENT_TASK" > .ralph/last-task.txt
+            echo "Picked task from queue: ${CURRENT_TASK}"
+        else
+            echo "No tasks in queue — delegating to loop.sh"
+            exec bash "${WORKDIR}/loop.sh"
+        fi
     fi
 
     CURRENT_PROVIDER="$(current_provider)"
