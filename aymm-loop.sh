@@ -273,6 +273,7 @@ PROVIDER_INDEX=0
 RATE_LIMIT_ADVANCES=0
 RATE_LIMIT_SLEEP_COUNT=0
 declare -A TASKS_ATTEMPTED
+declare -A COOLDOWN_COUNT
 
 init_failure_counters
 
@@ -358,9 +359,10 @@ while [[ ! -f STOP ]]; do
     # ── Handle exit code ─────────────────────────────────────────────────────
     case "$exit_code" in
         0)
-            # Pass: commit, reset failure counter (AI already marked step done in task file)
+            # Pass: commit, reset failure counter and cooldown counter
             git_commit_step "$CURRENT_TASK" "$CURRENT_PROVIDER"
             reset_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
+            COOLDOWN_COUNT["$CURRENT_PROVIDER"]=0
             echo "Provider ${CURRENT_PROVIDER} succeeded on task ${CURRENT_TASK}"
             if ! has_remaining_steps "$CURRENT_TASK"; then
                 close_task "$CURRENT_TASK" "$CURRENT_PROVIDER"
@@ -378,9 +380,16 @@ while [[ ! -f STOP ]]; do
             fi
             ;;
         100)
-            # Rate limited (429): advance to next provider immediately
-            echo "Provider ${CURRENT_PROVIDER} rate-limited (429) — switching provider"
-            advance_provider "$CURRENT_TASK" "rate_limit"
+            # Rate limited (429): first occurrence sleeps 60s and retries; second consecutive advances
+            COOLDOWN_COUNT["$CURRENT_PROVIDER"]=$(( ${COOLDOWN_COUNT["$CURRENT_PROVIDER"]:-0} + 1 ))
+            if (( ${COOLDOWN_COUNT["$CURRENT_PROVIDER"]} == 1 )); then
+                echo "Provider ${CURRENT_PROVIDER} rate-limited (429) — sleeping 60s before retry"
+                sleep 60
+            else
+                echo "Provider ${CURRENT_PROVIDER} rate-limited (429) twice — switching provider"
+                COOLDOWN_COUNT["$CURRENT_PROVIDER"]=0
+                advance_provider "$CURRENT_TASK" "rate_limit"
+            fi
             ;;
         101)
             # Forbidden/exhausted (403): treat as rate-limit exhaustion
