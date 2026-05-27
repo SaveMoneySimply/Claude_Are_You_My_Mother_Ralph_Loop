@@ -135,13 +135,19 @@ bundle_context() {
     prompt="${prompt}## Task context"$'\n\n'
     prompt="${prompt}${task_content}"$'\n\n'
 
-    # Error feedback from previous failed attempt
-    local error_log="${SCRIPT_DIR}/.ralph/last-test-error.txt"
-    if [[ -f "$error_log" ]]; then
-        prompt="${prompt}## Previous attempt failed"$'\n\n'
-        prompt="${prompt}Your last output failed the test. Error:"$'\n\n'
-        prompt="${prompt}$(cat "$error_log")"$'\n\n'
-        prompt="${prompt}Fix the issue and return the corrected file(s)."$'\n\n'
+    # Full failure history for this task across all providers
+    local test_log="${SCRIPT_DIR}/.ralph/test-log.jsonl"
+    if [[ -f "$test_log" ]]; then
+        local failure_history
+        failure_history="$(jq -r --arg t "$task_name" \
+            'select(.task == $t and .outcome == "fail") |
+             "[\(.ts)] \(.provider): \(.output)"' \
+            "$test_log")"
+        if [[ -n "$failure_history" ]]; then
+            prompt="${prompt}## Previous attempts on this task (all providers)"$'\n\n'
+            prompt="${prompt}${failure_history}"$'\n\n'
+            prompt="${prompt}Study these failures carefully before writing your solution."$'\n\n'
+        fi
     fi
 
     # Append content of files mentioned in the step (backtick or single-quoted names)
