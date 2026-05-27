@@ -380,8 +380,7 @@ main() {
         exit 1
     fi
 
-    # Temp file for raw API response
-    local tmp_response
+    # Temp file for raw API response — not local so the EXIT trap can see it
     tmp_response="$(mktemp /tmp/aymm-response-XXXXXX.json)"
     trap 'rm -f "$tmp_response"' EXIT
 
