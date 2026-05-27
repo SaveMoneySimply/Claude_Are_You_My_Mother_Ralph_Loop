@@ -6,6 +6,7 @@ set -uo pipefail
 WORKDIR=/workspace
 cd "$WORKDIR"
 mkdir -p .ralph tasks/2_active tasks/3_done
+rm -f STOP
 
 # ---------------------------------------------------------------------------
 # Load provider configuration
