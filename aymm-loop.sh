@@ -6,7 +6,8 @@ set -uo pipefail
 WORKDIR=/workspace
 cd "$WORKDIR"
 mkdir -p .ralph tasks/2_active tasks/3_done
-rm -f STOP
+rm -f "${WORKDIR}/STOP"
+echo "aymm-loop.sh started, STOP cleared"
 
 # ---------------------------------------------------------------------------
 # Load provider configuration
