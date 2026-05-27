@@ -67,7 +67,7 @@ bundle_context() {
 
     local task_name
     task_name="$(cat "$last_task_file")"
-    local task_file="${SCRIPT_DIR}/tasks/active/${task_name}.md"
+    local task_file="${SCRIPT_DIR}/tasks/2_active/${task_name}.md"
 
     if [[ ! -f "$task_file" ]]; then
         echo "Error: task file not found: $task_file" >&2
