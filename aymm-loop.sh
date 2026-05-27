@@ -338,12 +338,13 @@ while [[ ! -f STOP ]]; do
             fi
             ;;
         2)
-            # Task failure: increment counter; switch provider after 3 consecutive failures
+            # Task failure: increment counter; switch provider after per-provider attempt limit
             increment_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
             fail_count="$(get_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK")"
-            echo "Provider ${CURRENT_PROVIDER} failed (count: ${fail_count})"
-            if (( fail_count >= 3 )); then
-                echo "3 consecutive failures on ${CURRENT_PROVIDER} — switching provider"
+            max_attempts="$(provider_max_attempts "$CURRENT_PROVIDER")"
+            echo "Provider ${CURRENT_PROVIDER} failed (count: ${fail_count}/${max_attempts})"
+            if (( fail_count >= max_attempts )); then
+                echo "${fail_count} failures on ${CURRENT_PROVIDER} — switching provider"
                 advance_provider "$CURRENT_TASK" "failure"
             fi
             ;;
