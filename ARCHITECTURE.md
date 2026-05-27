@@ -39,19 +39,22 @@ Tasks flow through four directories; bash moves files between them, Claude never
 - `tasks/3_done/` — archived completed tasks
 
 ## Provider Priority
-1. Gemini 2.5 Flash (GEMINI_API_KEY) — most generous free tier, large context window
-2. Mistral Large (MISTRAL_API_KEY) — Codestral is coding-specific
-3. Groq Llama 3.3 70B (GROQ_API_KEY) — fastest inference, strict per-minute caps
-4. OpenRouter free models (OPENROUTER_API_KEY) — broadest model variety, fewest free requests
+1. Gemini 2.5 Flash (GEMINI_API_KEY) — most generous free tier (~1500 req/day), large context window; 3 attempts
+2. Groq Llama 3.3 70B (GROQ_API_KEY) — very generous daily quota, fast inference; 3 attempts
+3. Mistral Codestral (MISTRAL_API_KEY) — coding-specific model, moderate free quota; 2 attempts
+4. OpenRouter free models (OPENROUTER_API_KEY) — scarcest quota but strongest available model; 1 attempt, receives full failure history from all prior providers
 5. Claude fallback via existing loop.sh
 
+Total free-AI attempts per task: up to 10 (3+3+2+1) before Claude escalation.
+
 ## Escalation
-- 2× consecutive failures on one provider → switch provider
+- Per-provider failure threshold exceeded → switch provider (gemini/groq: 3×, mistral: 2×, openrouter: 1×)
 - HTTP 429 → immediate provider switch
 - HTTP 403 → mark provider exhausted for session
 - All providers fail one task → escalate to Claude (loop.sh)
 - Claude fails same task → BLOCKED (no second free-AI round)
 - All providers rate-limited → STOP + ntfy notification (user chooses: run ralph.sh now or wait ~1hr)
+- Each retry receives full failure history from all prior providers on this task
 
 ## Free AI Output Format
 The task runner sends file contents as context and asks the free AI to return changes as XML blocks:
