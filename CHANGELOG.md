@@ -2,6 +2,7 @@
 
 <!-- Append-only. One entry per completed task. -->
 <!-- Format: YYYY-MM-DD | task-name | one-line description | [task](tasks/done/name.md) -->
+2026-05-27 | sleep-retry-rate-limit | Sleep 1hr and retry when all providers rate-limited; STOP after 3 consecutive sleeps; ntfy notification on each sleep | [task](tasks/3_done/sleep-retry-rate-limit.md)
 2026-05-25 | provider-infrastructure | Added provider-config.sh, Dockerfile env passthroughs, firewall allowlists, and test-providers.sh for Gemini/Mistral/Groq/OpenRouter | [task](tasks/done/provider-infrastructure.md)
 2026-05-25 | task-runner | Implemented run_agent_task.sh with context bundler, Gemini + OpenAI-compat API calls, XML response parser, and test runner | [task](tasks/done/task-runner.md)
 2026-05-26 | aymm-orchestrator | Implemented aymm-loop.sh with multi-provider orchestration, failure tracking, rate-limit switching, Claude escalation, and provider state logging | [task](tasks/done/aymm-orchestrator.md)
