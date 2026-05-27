@@ -154,12 +154,20 @@ bundle_context() {
         fi
     done < <(echo "$next_step" | grep -oE '[a-zA-Z0-9_./\-]+\.(sh|md|js|ts|py|json|txt)' || true)
 
-    prompt="${prompt}## Response format"$'\n'
-    prompt="${prompt}Return any file changes as XML blocks:"$'\n'
+    prompt="${prompt}## Response format"$'\n\n'
+    prompt="${prompt}Tasks involve either creating new files or editing existing ones. Use the appropriate format:"$'\n\n'
+    prompt="${prompt}New file or full file replacement:"$'\n'
     prompt="${prompt}<file path=\"relative/path/to/file\">"$'\n'
-    prompt="${prompt}...full file content..."$'\n'
-    prompt="${prompt}</file>"$'\n'
-    prompt="${prompt}Write every file that needs to be created or modified. Do not truncate file contents."$'\n'
+    prompt="${prompt}...complete file content..."$'\n'
+    prompt="${prompt}</file>"$'\n\n'
+    prompt="${prompt}Surgical edit (replace lines start through end inclusive):"$'\n'
+    prompt="${prompt}<edit path=\"relative/path\" start=\"10\" end=\"15\">"$'\n'
+    prompt="${prompt}...replacement lines only..."$'\n'
+    prompt="${prompt}</edit>"$'\n\n'
+    prompt="${prompt}Delete a file:"$'\n'
+    prompt="${prompt}<delete path=\"relative/path\"/>"$'\n\n'
+    prompt="${prompt}Always include the updated task file with the completed step marked [x]."$'\n'
+    prompt="${prompt}Do not truncate file contents."$'\n'
 
     printf '%s' "$prompt"
 }
