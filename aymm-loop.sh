@@ -361,7 +361,8 @@ while [[ ! -f STOP ]]; do
     # ── Handle exit code ─────────────────────────────────────────────────────
     case "$exit_code" in
         0)
-            # Pass: commit, reset failure counter and cooldown counter
+            # Mark step done first so it's included in the commit
+            mark_step_done "$CURRENT_TASK"
             git_commit_step "$CURRENT_TASK" "$CURRENT_PROVIDER"
             reset_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
             COOLDOWN_COUNT["$CURRENT_PROVIDER"]=0
