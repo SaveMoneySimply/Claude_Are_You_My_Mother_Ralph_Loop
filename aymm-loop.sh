@@ -162,6 +162,63 @@ git_commit_step() {
     fi
 }
 
+# Build a prompt for Claude to review a completed phase
+build_phase_review_prompt() {
+    local phase="$1"
+    printf 'You are reviewing completed work for %s of this project.\n\n' "$phase"
+    printf '## Architecture\n\n'
+    awk '/^## Directory/{exit} {print}' ARCHITECTURE.md 2>/dev/null
+    printf '\n## Completed tasks in %s\n\n' "$phase"
+    for f in "tasks/3_done/${phase}-"*.md; do
+        [[ -f "$f" ]] || continue
+        printf '### %s\n\n' "$(basename "$f")"
+        cat "$f"
+        printf '\n'
+    done
+    printf '## Recent test log (last 20 entries)\n\n'
+    tail -20 .ralph/test-log.jsonl 2>/dev/null \
+        | jq -r '"\(.ts) \(.provider) \(.outcome) — \(.task)"' || echo "(no log)"
+    printf '\nWrite a concise phase review covering:\n'
+    printf '1. What was built (bullet list)\n'
+    printf '2. Test results summary\n'
+    printf '3. Any issues or surprises noticed\n'
+    printf '4. What the next phase builds on from this phase\n\n'
+    printf 'Be specific. Free AI providers will read this as context for the next phase.\n'
+}
+
+# Run Claude to write the phase review, optionally pause for non-high autonomy
+run_phase_review() {
+    local phase="$1"
+    echo "Running Claude phase review for ${phase}..."
+    mkdir -p handoffs
+    build_phase_review_prompt "$phase" | \
+        claude --model sonnet -p --dangerously-skip-permissions \
+        > "handoffs/${phase}-review.md"
+    echo "Phase review written: handoffs/${phase}-review.md"
+
+    if [[ "$(read_autonomy)" != "high" ]]; then
+        echo "${phase} complete — review handoffs/${phase}-review.md, then delete STOP to continue" > STOP
+    fi
+}
+
+# Move completed phase task files to _archive/phase<N>/
+archive_phase() {
+    local phase="$1"
+    local date_suffix
+    date_suffix="$(date '+%Y-%m-%d')"
+    mkdir -p "_archive/${phase}"
+    for f in "tasks/3_done/${phase}-"*.md; do
+        [[ -f "$f" ]] || continue
+        local base
+        base="$(basename "$f")"
+        local stripped="${base#${phase}-}"     # removes "phase1-"
+        stripped="${stripped#[0-9][0-9]-}"     # removes "01-"
+        local archived="_archive/${phase}/${stripped%.md}-${date_suffix}.md"
+        mv "$f" "$archived"
+        echo "Archived: $archived"
+    done
+}
+
 # Move a finished task to done, update plan links and CHANGELOG
 close_task() {
     local task="$1"
@@ -183,6 +240,18 @@ close_task() {
         >> CHANGELOG.md
 
     echo "Task ${task} closed."
+
+    # Phase completion check
+    local phase="${task%%-*}"
+    if [[ "$phase" =~ ^phase[0-9]+ ]]; then
+        local remaining
+        remaining="$(find tasks/1_queue tasks/2_active -name "${phase}-*.md" 2>/dev/null | wc -l)"
+        if (( remaining == 0 )); then
+            echo "Phase ${phase} complete"
+            run_phase_review "$phase"
+            archive_phase "$phase"
+        fi
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -269,12 +338,12 @@ while [[ ! -f STOP ]]; do
             fi
             ;;
         2)
-            # Task failure: increment counter; switch provider after 2 consecutive failures
+            # Task failure: increment counter; switch provider after 3 consecutive failures
             increment_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK"
             fail_count="$(get_failure_count "$CURRENT_PROVIDER" "$CURRENT_TASK")"
             echo "Provider ${CURRENT_PROVIDER} failed (count: ${fail_count})"
-            if (( fail_count >= 2 )); then
-                echo "2 consecutive failures on ${CURRENT_PROVIDER} — switching provider"
+            if (( fail_count >= 3 )); then
+                echo "3 consecutive failures on ${CURRENT_PROVIDER} — switching provider"
                 advance_provider "$CURRENT_TASK" "failure"
             fi
             ;;
