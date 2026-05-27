@@ -135,6 +135,15 @@ bundle_context() {
     prompt="${prompt}## Task context"$'\n\n'
     prompt="${prompt}${task_content}"$'\n\n'
 
+    # Error feedback from previous failed attempt
+    local error_log="${SCRIPT_DIR}/.ralph/last-test-error.txt"
+    if [[ -f "$error_log" ]]; then
+        prompt="${prompt}## Previous attempt failed"$'\n\n'
+        prompt="${prompt}Your last output failed the test. Error:"$'\n\n'
+        prompt="${prompt}$(cat "$error_log")"$'\n\n'
+        prompt="${prompt}Fix the issue and return the corrected file(s)."$'\n\n'
+    fi
+
     # Append content of files mentioned in the step (backtick or single-quoted names)
     local fname
     while IFS= read -r fname; do
