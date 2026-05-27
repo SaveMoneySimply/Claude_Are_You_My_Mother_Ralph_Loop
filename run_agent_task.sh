@@ -114,26 +114,34 @@ bundle_context() {
 
     local prompt=""
     prompt="${prompt}You are an autonomous coding agent. Your task is described below."$'\n\n'
+    prompt="${prompt}IMPORTANT: The <context> blocks below are read-only background information."$'\n'
+    prompt="${prompt}Do NOT write <file> blocks for context sections. Only write <file> or <edit> blocks"$'\n'
+    prompt="${prompt}for files that must be created or changed to complete the task step."$'\n\n'
 
     if [[ -n "$arch_overview" ]]; then
-        prompt="${prompt}## Project overview"$'\n\n'
-        prompt="${prompt}${arch_overview}"$'\n\n'
+        prompt="${prompt}<context name=\"project-overview\">"$'\n'
+        prompt="${prompt}${arch_overview}"$'\n'
+        prompt="${prompt}</context>"$'\n\n'
     fi
 
     if [[ -n "$prev_review" ]]; then
-        prompt="${prompt}## Previous phase review"$'\n\n'
-        prompt="${prompt}${prev_review}"$'\n\n'
+        prompt="${prompt}<context name=\"previous-phase-review\">"$'\n'
+        prompt="${prompt}${prev_review}"$'\n'
+        prompt="${prompt}</context>"$'\n\n'
     fi
 
     if [[ -n "$phase_tasks" ]]; then
-        prompt="${prompt}## Phase task overview"$'\n\n'
-        prompt="${prompt}${phase_tasks}"$'\n\n'
+        prompt="${prompt}<context name=\"phase-task-overview\">"$'\n'
+        prompt="${prompt}${phase_tasks}"$'\n'
+        prompt="${prompt}</context>"$'\n\n'
     fi
 
     prompt="${prompt}## Current task step"$'\n\n'
     prompt="${prompt}${next_step}"$'\n\n'
-    prompt="${prompt}## Task context"$'\n\n'
-    prompt="${prompt}${task_content}"$'\n\n'
+
+    prompt="${prompt}<context name=\"task\">"$'\n'
+    prompt="${prompt}${task_content}"$'\n'
+    prompt="${prompt}</context>"$'\n\n'
 
     # Full failure history for this task across all providers
     local test_log="${SCRIPT_DIR}/.ralph/test-log.jsonl"
@@ -144,8 +152,9 @@ bundle_context() {
              "[\(.ts)] \(.provider)\nCode written:\n\(.response)\nTest error:\n\(.output)\n---"' \
             "$test_log")"
         if [[ -n "$failure_history" ]]; then
-            prompt="${prompt}## Previous attempts on this task (all providers)"$'\n\n'
-            prompt="${prompt}${failure_history}"$'\n\n'
+            prompt="${prompt}<context name=\"previous-attempts\">"$'\n'
+            prompt="${prompt}${failure_history}"$'\n'
+            prompt="${prompt}</context>"$'\n\n'
             prompt="${prompt}Study what was tried and why it failed before writing your solution."$'\n\n'
         fi
     fi
@@ -155,8 +164,9 @@ bundle_context() {
     while IFS= read -r fname; do
         [[ -z "$fname" ]] && continue
         if [[ -f "${SCRIPT_DIR}/${fname}" ]]; then
-            prompt="${prompt}## File: ${fname}"$'\n'
-            prompt="${prompt}$(cat "${SCRIPT_DIR}/${fname}")"$'\n\n'
+            prompt="${prompt}<context name=\"file:${fname}\">"$'\n'
+            prompt="${prompt}$(cat "${SCRIPT_DIR}/${fname}")"$'\n'
+            prompt="${prompt}</context>"$'\n\n'
         fi
     done < <(echo "$next_step" | grep -oE '[a-zA-Z0-9_./\-]+\.(sh|md|js|ts|py|json|txt)' || true)
 
