@@ -345,15 +345,17 @@ run_test_command() {
     local response
     response="$(cat "${SCRIPT_DIR}/.ralph/last-response.txt" 2>/dev/null || echo "")"
 
-    printf '%s\n' "$(jq -n \
+    local log_entry
+    log_entry="$(jq -n \
         --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        --arg task "$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null)" \
+        --arg task "$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null || true)" \
         --arg provider "${PROVIDER}" \
         --arg outcome "$outcome" \
         --arg output "$output" \
         --arg response "$response" \
-        '{ts:$ts, task:$task, provider:$provider, outcome:$outcome, output:$output, response:$response}')" \
-        >> "$test_log" || true
+        '{ts:$ts, task:$task, provider:$provider, outcome:$outcome, output:$output, response:$response}' \
+        2>/dev/null || true)"
+    [[ -n "$log_entry" ]] && printf '%s\n' "$log_entry" >> "$test_log" || true
 
     if [[ "$outcome" == "pass" ]]; then
         return 0
