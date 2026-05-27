@@ -14,6 +14,13 @@ is invoked. If a free AI's output passes the test suite, Claude never gets invol
 - Container: Docker (extends existing Ralph Loop infrastructure)
 - Test gate: bash syntax check (see Test Command below)
 
+## Phases
+
+### Phase 1 — <name>
+<one-sentence description of what this phase builds>
+
+# Add more phases as work is planned
+
 ## Key Files
 - `ralph.sh` — host wrapper; modes: `execute` (Claude only), `plan` (breakdown), `aymm` (free-AI-first)
 - `aymm-loop.sh` — container orchestrator for aymm mode (outer provider loop + inner execution loop)
