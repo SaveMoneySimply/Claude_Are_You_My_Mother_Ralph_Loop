@@ -141,12 +141,12 @@ bundle_context() {
         local failure_history
         failure_history="$(jq -r --arg t "$task_name" \
             'select(.task == $t and .outcome == "fail") |
-             "[\(.ts)] \(.provider): \(.output)"' \
+             "[\(.ts)] \(.provider)\nCode written:\n\(.response)\nTest error:\n\(.output)\n---"' \
             "$test_log")"
         if [[ -n "$failure_history" ]]; then
             prompt="${prompt}## Previous attempts on this task (all providers)"$'\n\n'
             prompt="${prompt}${failure_history}"$'\n\n'
-            prompt="${prompt}Study these failures carefully before writing your solution."$'\n\n'
+            prompt="${prompt}Study what was tried and why it failed before writing your solution."$'\n\n'
         fi
     fi
 
@@ -281,6 +281,8 @@ parse_and_apply_response() {
     local tmp_text
     tmp_text="$(mktemp /tmp/aymm-text-XXXXXX.txt)"
     printf '%s' "$text_content" > "$tmp_text"
+    # Persist for test log — run_test_command() reads this to record what was tried
+    printf '%s' "$text_content" > "${SCRIPT_DIR}/.ralph/last-response.txt"
     bash "${SCRIPT_DIR}/apply_changes.sh" "$tmp_text" "$SCRIPT_DIR"
     local rc=$?
     rm -f "$tmp_text"
@@ -322,13 +324,17 @@ run_test_command() {
         echo "$output"
     fi
 
+    local response
+    response="$(cat "${SCRIPT_DIR}/.ralph/last-response.txt" 2>/dev/null || echo "")"
+
     printf '%s\n' "$(jq -n \
         --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --arg task "$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null)" \
         --arg provider "${PROVIDER}" \
         --arg outcome "$outcome" \
         --arg output "$output" \
-        '{ts:$ts, task:$task, provider:$provider, outcome:$outcome, output:$output}')" \
+        --arg response "$response" \
+        '{ts:$ts, task:$task, provider:$provider, outcome:$outcome, output:$output, response:$response}')" \
         >> "$test_log"
 
     [[ "$outcome" == "pass" ]] && return 0 || return 2
