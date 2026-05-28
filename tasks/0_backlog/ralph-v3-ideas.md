@@ -39,3 +39,7 @@ HTTP 429 = temporary rate limit (resets in minutes). HTTP 403/quota = daily limi
 Engine lives at `~/tools/ralph`, mounted read-only as `/engine` into any project's container. Project workspace mounted separately as `/workspace`. `ralph.sh` moves to `~/tools/ralph/ralph.sh` — installed globally, run from any project dir. Project repos become clean: just `ARCHITECTURE.md` + `tasks/` + project source.
 
 **When to do it:** After AYMM is stable and ralph is being pointed at real external projects.
+
+## My Thoughts
+
+I want to make sure we are sending the files that are needed for the task to the free AI
