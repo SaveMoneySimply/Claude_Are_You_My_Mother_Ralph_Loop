@@ -42,9 +42,8 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 # **Parent task:** original-name · **Split depth:** 1
 
 ## Steps
-- [ ] Step 1: <what to do> — done when: <acceptance criterion>
+- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <shell command bash runs after the global test>
 - [ ] Step 2: ...
-- [ ] Step N (final): run test command — on pass, commit and close task
 
 ## Smoke test
 <what to manually verify after the loop completes this task>
