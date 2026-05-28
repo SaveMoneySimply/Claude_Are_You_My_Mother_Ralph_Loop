@@ -194,6 +194,26 @@ bundle_context() {
 
 handle_http_status() {
     local status="$1"
+    local response_body_file="$2"
+
+    if [[ "$status" -ne 200 ]]; then
+        mkdir -p "${SCRIPT_DIR}/.ralph"
+
+        local response_body=""
+        if [[ -f "$response_body_file" ]]; then
+            response_body="$(cat "$response_body_file")"
+        fi
+
+        local log_entry
+        log_entry="$(jq -n \
+            --arg ts "$(date +%s)" \
+            --arg provider "$PROVIDER" \
+            --arg status_code "$status" \
+            --arg body "$response_body" \
+            '{timestamp:($ts | tonumber), provider:$provider, http_status_code:($status_code | tonumber), response_body:$body}')"
+        printf '%s\n' "$log_entry" >> "${SCRIPT_DIR}/.ralph/http-error-log.jsonl"
+    fi
+
     case "$status" in
         200) return 0 ;;
         429)
@@ -236,7 +256,7 @@ call_gemini() {
         -H "Content-Type: application/json" \
         -d "$payload")"
 
-    handle_http_status "$http_status"
+    handle_http_status "$http_status" "$tmp_response"
 }
 
 # ---------------------------------------------------------------------------
@@ -265,7 +285,7 @@ call_openai_compat() {
         -H "Authorization: Bearer ${api_key}" \
         -d "$payload")"
 
-    handle_http_status "$http_status"
+    handle_http_status "$http_status" "$tmp_response"
 }
 
 # ---------------------------------------------------------------------------
