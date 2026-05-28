@@ -37,12 +37,12 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 # Task — <short name>
 
 **Model:** sonnet · **Effort:** high · **Tokens estimated:** 50000 · **Attempts:** 0/3
-**Test command:** npm run build && npm test
+**Test command:** <only include if different from ARCHITECTURE.md default — omit to use the default>
 # Sub-tasks only — omit these lines for top-level tasks:
 # **Parent task:** original-name · **Split depth:** 1
 
 ## Steps
-- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <shell command bash runs after the global test>
+- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <command that verifies THIS specific change was made, e.g. grep -q 'key-string' file.sh or test -f newfile.sh — NOT a repeat of the global test>
 - [ ] Step 2: ...
 
 ## Smoke test
