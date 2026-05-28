@@ -354,9 +354,25 @@ run_test_command() {
 
     echo "Running test: $test_cmd"
     if output="$(eval "$test_cmd" 2>&1)"; then
-        outcome="pass"
-        rm -f "$error_log"
-        echo "$output"
+        # Run per-step test if present (-- test: <cmd> at end of step text)
+        local step_test step_output
+        step_test="$(grep -oP '(?<=-- test: ).*' "${SCRIPT_DIR}/.ralph/last-step.txt" 2>/dev/null || true)"
+        if [[ -n "$step_test" ]]; then
+            echo "Running step test: $step_test"
+            if step_output="$(eval "$step_test" 2>&1)"; then
+                outcome="pass"
+                rm -f "$error_log"
+                echo "$step_output"
+            else
+                outcome="fail"
+                printf '%s' "$step_output" > "$error_log"
+                echo "$step_output"
+            fi
+        else
+            outcome="pass"
+            rm -f "$error_log"
+            echo "$output"
+        fi
     else
         outcome="fail"
         printf '%s' "$output" > "$error_log"
