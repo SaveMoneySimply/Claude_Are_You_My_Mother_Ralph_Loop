@@ -8,10 +8,12 @@ source "provider-config.sh"
 
 echo "AYMM Provider Status"
 # Print table header
-printf "%-12s | %-25s | %-12s | %-14s
-" "Provider" "Model" "Max Attempts" "API Key Status"
-printf "-------------|---------------------------|--------------|----------------
-"
+printf "%-12s | %-25s | %-12s | %-14s\n" "Provider" "Model" "Max Attempts" "API Key Status"
+printf "-------------|---------------------------|--------------|----------------\n"
+
+# Initialize counters for summary
+keys_set_count=0
+keys_missing_count=0
 
 # Iterate over providers and print their status
 for provider in "${PROVIDERS[@]}"; do
@@ -23,9 +25,14 @@ for provider in "${PROVIDERS[@]}"; do
     # Check if the environment variable corresponding to the key_var_name is set and non-empty
     if [[ -n "${!api_key_var_name}" ]]; then
         key_status="set"
+        ((keys_set_count++))
+    else
+        ((keys_missing_count++))
     fi
 
-    printf "%-12s | %-25s | %-12s | %-14s
-" "$provider" "$model" "$max_attempts" "$key_status"
+    printf "%-12s | %-25s | %-12s | %-14s\n" "$provider" "$model" "$max_attempts" "$key_status"
 done
 
+# Add a separator line before the summary
+printf "-------------|---------------------------|--------------|----------------\n"
+printf "API Key Summary: %d set, %d missing\n" "$keys_set_count" "$keys_missing_count"
