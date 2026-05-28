@@ -9,7 +9,7 @@ source "provider-config.sh"
 echo "AYMM Provider Status"
 # Print table header
 printf "%-12s | %-25s | %-12s | %-14s\n" "Provider" "Model" "Max Attempts" "API Key Status"
-printf "-------------|---------------------------|--------------|----------------\n"
+echo "-------------|---------------------------|--------------|----------------"
 
 # Initialize counters for summary
 keys_set_count=0
@@ -34,5 +34,5 @@ for provider in "${PROVIDERS[@]}"; do
 done
 
 # Add a separator line before the summary
-printf "-------------|---------------------------|--------------|----------------\n"
+echo "-------------|---------------------------|--------------|----------------"
 printf "API Key Summary: %d set, %d missing\n" "$keys_set_count" "$keys_missing_count"
