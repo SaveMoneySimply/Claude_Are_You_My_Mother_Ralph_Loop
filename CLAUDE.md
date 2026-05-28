@@ -42,7 +42,7 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 # **Parent task:** original-name · **Split depth:** 1
 
 ## Steps
-- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <command that verifies THIS specific change was made, e.g. grep -q 'key-string' file.sh or test -f newfile.sh — NOT a repeat of the global test>
+- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <command that verifies THIS specific change was made, e.g. grep -q 'key-string' file.sh or test -f newfile.sh — NOT a repeat of the global test. Ask: "what's the cheapest check that would catch the AI returning valid-but-wrong code?">
 - [ ] Step 2: ...
 
 ## Smoke test
