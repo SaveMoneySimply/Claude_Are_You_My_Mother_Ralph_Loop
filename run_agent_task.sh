@@ -77,6 +77,7 @@ bundle_context() {
     # Find next unchecked step
     local next_step
     next_step="$(grep -m1 -- '^\- \[ \]' "$task_file" || true)"
+    printf '%s\n' "$next_step" > "${SCRIPT_DIR}/.ralph/last-step.txt"
     if [[ -z "$next_step" ]]; then
         echo "Error: no unchecked steps found in $task_file" >&2
         return 1
