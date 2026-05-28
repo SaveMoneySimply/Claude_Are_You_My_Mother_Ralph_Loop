@@ -43,3 +43,9 @@ Engine lives at `~/tools/ralph`, mounted read-only as `/engine` into any project
 ## My Thoughts
 
 I want to make sure we are sending the files that are needed for the task to the free AI
+
+**Daily quota reset detection**
+When a provider hits its daily limit (403 / quota-exhausted body), read the reset timestamp from the response headers (e.g. `x-ratelimit-reset`, `Retry-After`) and sleep exactly that long before retrying, rather than stopping the loop entirely. Temporary 429s don't need this — the loop naturally cycles back after working through other providers and the window has reset by then. This is only worth building once we have real response examples from each provider hitting their daily limit.
+
+**Prerequisite: log full HTTP error responses**
+Before building reset detection, we need real data. Task `log-http-errors` (in queue) adds a `.ralph/http-error-log.jsonl` that captures the full response body and status on every non-200, so we can see what each provider actually returns when rate limited or quota-blown.
