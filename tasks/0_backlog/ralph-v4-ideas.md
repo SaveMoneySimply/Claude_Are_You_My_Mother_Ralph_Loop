@@ -27,6 +27,9 @@ When a provider writes code that fails the test gate, revert the working tree to
 **Pass AYMM failure history to Claude on escalation**
 When all free providers exhaust and `loop.sh` is called as Claude fallback, inject the `previous-attempts` context from `.ralph/test-log.jsonl` into the prompt so Claude knows what was tried and broken. Currently `run_agent_task.sh` passes this context between free providers, but the handoff to `loop.sh` drops it. Claude succeeded without it in the p1s1 run, but for harder tasks it would help Claude avoid repeating the same broken approaches.
 
+**close_task() gap when Claude handles final steps via loop.sh escalation**
+When aymm-loop.sh escalates to Claude (`SINGLE_TASK=1 bash loop.sh`), loop.sh's own close logic runs — it moves the task file to `3_done/` via `prompt.md` instructions. But aymm-loop.sh's `close_task()` never fires, so the task branch is not merged to main, not deleted, and the `2_active/` file is left as a stale copy. Observed after p1s1: had to manually `git merge --ff-only`, `git branch -d`, and `rm tasks/2_active/...`. Fix: after `SINGLE_TASK=1 bash loop.sh` returns, check if the task has been closed (file no longer in `2_active/`) and if so, run the branch merge/delete portion of `close_task()` manually.
+
 **Single-attempt-then-switch on task failure (consider alongside rollback)**
 Currently retries the same provider up to 3× on task failure before switching. Once rollback is in place, a failed attempt is clean (no broken baseline), but retrying the same provider quickly can trigger 429s. Consider reducing to 1 attempt per provider for code-writing failures — log the result, pass it as context to the next provider, move on. Keep the retry count for rate-limit recovery (which is already handled separately).
 
