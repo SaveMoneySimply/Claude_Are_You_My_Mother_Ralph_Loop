@@ -43,6 +43,14 @@ When a loop step requires a host command (e.g. `docker build`, writing outside `
 **Plan mode — update or remove**
 `ralph.sh plan` / `prompt-plan.md` is not wired into the current folder structure — it references `plans/*.md` and `tasks/active/` which no longer exist. Interactive planning with Claude has proven better in practice (back-and-forth produces better task files, scope can be adjusted in real-time). Options: update `prompt-plan.md` to use the current `tasks/0_backlog/` structure and `tasks/1_queue/`, or remove plan mode entirely and document that planning is done interactively. Don't touch until there's a clear reason to keep it.
 
+**Plan-task linkage and auto-archiving**
+Plans and tasks are currently unconnected — `close_task()` infers a phase from the task name prefix but has no awareness of plan files. True automation needs:
+1. `**Plan:** p2-plan.md` header field in each task pointing to its plan file
+2. `close_task()` reads that field, opens the plan file, finds the matching checklist item, marks it `[x]`
+3. When all items in the plan are `[x]`, move the plan file to `_archive/plans/`
+
+Also needs a decision on folder structure: currently plans, tasks, and ideas are all mixed in `tasks/0_backlog/`. Clean separation would be `plans/` (phases with completion criteria), `tasks/` pipeline (unchanged), and `ideas/` (long-running files like `ralph-v4-ideas.md` that never complete). The ideas file is a different kind of thing from a plan — it accumulates rather than completes and shouldn't be in the task pipeline at all.
+
 **Matt's Thoughts**
 
 -I need to understand what ralph.sh plan mode does and try to use it for the next planing session
