@@ -2,6 +2,7 @@
 
 <!-- Append-only. One entry per completed task. -->
 <!-- Format: YYYY-MM-DD | task-name | one-line description | [task](tasks/done/name.md) -->
+2026-05-29 | aymm-only-mode | Add --only flag to ralph.sh aymm to stop instead of escalating to Claude when free providers exhausted | [task](tasks/3_done/aymm-only-mode.md)
 2026-05-29 | validate-per-step-test | Add loop_version() and provider_count() to provider-config.sh to validate per-step test extraction | [task](tasks/3_done/validate-per-step-test.md)
 2026-05-28 | per-step-test | Write next_step to .ralph/last-step.txt in bundle_context() for per-step test extraction | [task](tasks/3_done/per-step-test.md)
 2026-05-27 | cooldown-detection | Sleep 60s and retry on first 429 per provider; advance to next provider on second consecutive 429; 403 still advances immediately | [task](tasks/3_done/cooldown-detection.md)
