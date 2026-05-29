@@ -62,3 +62,11 @@ provider_api_format() {
         *)           echo "" ;;
     esac
 }
+
+loop_version() {
+    echo "aymm-1.0"
+}
+
+provider_count() {
+    echo "${#PROVIDERS[@]}"
+}
