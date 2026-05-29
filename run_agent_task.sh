@@ -389,7 +389,7 @@ run_test_command() {
     if output="$(eval "$test_cmd" 2>&1)"; then
         # Run per-step test if present (-- test: <cmd> at end of step text)
         local step_test step_output
-        step_test="$(grep -oP '(?<=-- test: ).*' "${SCRIPT_DIR}/.ralph/last-step.txt" 2>/dev/null || true)"
+        step_test="$(grep -oP '(?<=-- test: ).*' "${SCRIPT_DIR}/.ralph/last-step.txt" 2>/dev/null | sed 's/[[:space:]]*-- files:.*$//' || true)"
         if [[ -n "$step_test" ]]; then
             echo "Running step test: $step_test"
             if step_output="$(eval "$step_test" 2>&1)"; then
