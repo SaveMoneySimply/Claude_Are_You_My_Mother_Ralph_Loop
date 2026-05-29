@@ -312,6 +312,10 @@ while [[ ! -f STOP ]]; do
             reset_all_failure_counts "$CURRENT_TASK"
             echo "Picked task from queue: ${CURRENT_TASK}"
         else
+            if [[ "${AYMM_ONLY:-}" == "1" ]]; then
+                echo "All tasks complete (aymm-only mode)" > STOP
+                break
+            fi
             echo "No tasks in queue — delegating to loop.sh"
             exec bash "${WORKDIR}/loop.sh"
         fi
@@ -347,6 +351,10 @@ while [[ ! -f STOP ]]; do
     # ── Claude escalation (Step 5) ──────────────────────────────────────────
     if [[ -f ".ralph/aymm-escalate.txt" ]]; then
         rm -f ".ralph/aymm-escalate.txt"
+        if [[ "${AYMM_ONLY:-}" == "1" ]]; then
+            echo "All free providers exhausted — stopping (aymm-only mode)" > STOP
+            break
+        fi
         echo "Escalating to Claude via loop.sh"
         exec bash "${WORKDIR}/loop.sh"
     fi

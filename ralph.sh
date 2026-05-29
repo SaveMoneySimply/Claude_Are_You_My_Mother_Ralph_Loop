@@ -3,6 +3,7 @@
 #   bash ralph.sh          — execution mode (default): works through tasks
 #   bash ralph.sh plan     — breakdown mode: generates task files from plans
 #   bash ralph.sh aymm     — multi-provider mode: tries free providers before Claude
+#   bash ralph.sh aymm --only — aymm mode without Claude fallback
 # Requires: docker, and either 'claude login' (subscription) or ANTHROPIC_API_KEY set
 set -euo pipefail
 
@@ -41,12 +42,6 @@ mkdir -p .ralph
 # Auth: use credentials file (subscription) or API key
 AUTH_MOUNT=""
 AUTH_ENV=""
-if [ -d "$CLAUDE_DIR" ]; then
-    AUTH_MOUNT="-v $CLAUDE_DIR:/home/claude/.claude"
-fi
-if [ -f "$HOME/.claude.json" ]; then
-    AUTH_MOUNT="$AUTH_MOUNT -v $HOME/.claude.json:/home/claude/.claude.json"
-fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
 fi
@@ -66,7 +61,11 @@ case "$MODE" in
         ;;
     aymm)
         echo "Starting Ralph in multi-provider mode (aymm-loop.sh). Logs → .ralph/loop.log"
-        LOOP_ENV="-e LOOP_SCRIPT=aymm-loop.sh"
+        if [ "${2:-}" = "--only" ]; then
+            LOOP_ENV="$LOOP_ENV -e AYMM_ONLY=1"
+            echo "(--only: no Claude fallback)"
+        fi
+        LOOP_ENV="$LOOP_ENV -e LOOP_SCRIPT=aymm-loop.sh"
         ;;
     *)
         echo "Starting Ralph in execution mode (prompt.md). Logs → .ralph/loop.log"
