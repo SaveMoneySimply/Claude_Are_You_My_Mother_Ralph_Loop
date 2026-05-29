@@ -23,3 +23,4 @@
 2026-05-29 | per-task-write-allowlist | Add opt-in Allowed files field to task headers; apply_changes.sh skips out-of-scope blocks; run_agent_task.sh passes allowlist from task file | [task](tasks/3_done/per-task-write-allowlist.md)
 2026-05-29 | p2s5-run-mode-failsafe | Add run-mode failsafe to loop.sh and aymm-loop.sh | [task](tasks/3_done/2026-05-29-p2s5-run-mode-failsafe.md)
 2026-05-29 | hello-world | Create project/hello.sh that outputs Hello, Ralph! | [task](tasks/3_done/2026-05-29-hello-world.md)
+2026-05-29 | p2s4-project-dir-and-e2e-test | Validate fork model: project/ holds code, tasks stay at repo root, loop runs end-to-end | [task](tasks/3_done/2026-05-29-p2s4-project-dir-and-e2e-test.md)
