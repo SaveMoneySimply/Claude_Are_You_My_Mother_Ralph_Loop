@@ -22,8 +22,8 @@ Expected escalation sequences (step 0 = declared, steps 1+):
 - `sonnet max`  → sonnet:max, opus:low, opus:max, context_expansion, split, blocked  (no same-model-max since already max)
 
 ## Steps
-- [ ] Copy the `get_step_spec` function verbatim from `project/loop.sh` into `project/test-engine.sh` — include the `FORCE_SPLIT_STEP=50` constant — done when: function is present and callable -- test: grep -q 'get_step_spec' project/test-engine.sh -- files: project/test-engine.sh, project/loop.sh:13-74
-- [ ] Add tests for edge cases: (a) `haiku` at step 0 returns something starting with "haiku"; (b) `opus max` at step 1 returns "context_expansion" (skips same-model-max and no higher models); (c) `sonnet max` at step 1 returns "opus:low" (skips same-model-max since already max); (d) any model at step >= 50 returns "split" (FORCE_SPLIT_STEP) — done when: 4 edge-case assertions pass -- test: (cd project && bash test-engine.sh) | grep -q 'escalation_edge' -- files: project/test-engine.sh
+- [x] Copy the `get_step_spec` function verbatim from `project/loop.sh` into `project/test-engine.sh` — include the `FORCE_SPLIT_STEP=50` constant — done when: function is present and callable -- test: grep -q 'get_step_spec' project/test-engine.sh -- files: project/test-engine.sh, project/loop.sh:13-74
+- [x] Add tests for edge cases: (a) `haiku` at step 0 returns something starting with "haiku"; (b) `opus max` at step 1 returns "context_expansion" (skips same-model-max and no higher models); (c) `sonnet max` at step 1 returns "opus:low" (skips same-model-max since already max); (d) any model at step >= 50 returns "split" (FORCE_SPLIT_STEP) — done when: 4 edge-case assertions pass -- test: (cd project && bash test-engine.sh) | grep -q 'escalation_edge' -- files: project/test-engine.sh
 
 ## Smoke test
 Run `(cd project && bash test-engine.sh)` and confirm the escalation tests all pass alongside prior tests.
