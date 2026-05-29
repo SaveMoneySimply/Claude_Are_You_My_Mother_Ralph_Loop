@@ -132,8 +132,15 @@ pick_task() {
     local queued
     queued=$(ls tasks/1_queue/*.md 2>/dev/null | head -1)
     if [ -n "$queued" ]; then
+        local task_name
+        task_name=$(basename "$queued" .md)
+        if [ -f "tasks/3_done/${task_name}.md" ]; then
+            echo "Warning: '${task_name}' already in 3_done/ — removing stale queue entry" >&2
+            rm "$queued"
+            echo ""; return
+        fi
         mv "$queued" tasks/2_active/
-        basename "$queued" .md
+        echo "$task_name"
         return
     fi
     echo ""

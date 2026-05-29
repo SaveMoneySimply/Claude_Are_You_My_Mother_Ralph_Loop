@@ -258,7 +258,7 @@ close_task() {
 
     mv "$task_file" "$done_file"
 
-    echo "| $(date '+%Y-%m-%d') | ${task} | Completed via ${provider} | [task](tasks/3_done/${task}.md) |" \
+    echo "$(date '+%Y-%m-%d') | ${task} | Completed via ${provider} | [task](tasks/3_done/${task}.md)" \
         >> CHANGELOG.md
 
     echo "Task ${task} closed."
