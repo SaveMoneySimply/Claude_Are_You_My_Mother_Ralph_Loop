@@ -26,6 +26,13 @@ read_autonomy() {
         || echo "low"
 }
 
+read_run_mode() {
+    local task_file="$1"
+    grep -oiP '\bRun:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
+        | head -1 | tr '[:upper:]' '[:lower:]' \
+        || echo "any"
+}
+
 # Returns the current provider name given PROVIDER_INDEX and PROVIDERS array
 current_provider() {
     echo "${PROVIDERS[$PROVIDER_INDEX]:-}"
@@ -326,6 +333,12 @@ while [[ ! -f STOP ]]; do
             bash "${WORKDIR}/loop.sh"
             break
         fi
+    fi
+
+    RUN_MODE="$(read_run_mode "tasks/2_active/${CURRENT_TASK}.md")"
+    if [[ "$RUN_MODE" == "interactive" || "$RUN_MODE" == "ralph" ]]; then
+        echo "Task ${CURRENT_TASK} is marked run:${RUN_MODE} — cannot run via ralph.sh aymm. Use Claude directly or bash ralph.sh." > STOP
+        break
     fi
 
     CURRENT_PROVIDER="$(current_provider)"

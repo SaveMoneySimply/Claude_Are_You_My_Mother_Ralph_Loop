@@ -20,6 +20,13 @@ read_autonomy() {
         || echo "low"
 }
 
+read_run_mode() {
+    local task_file="$1"
+    grep -oiP '\bRun:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
+        | head -1 | tr '[:upper:]' '[:lower:]' \
+        || echo "any"
+}
+
 # Given (declared_model, declared_effort, step_number) prints "model:effort"
 # or one of the special keywords: context_expansion, split, blocked
 get_step_spec() {
@@ -242,6 +249,13 @@ while [ ! -f STOP ]; do
     fi
 
     TASK_FILE="tasks/2_active/${CURRENT_TASK}.md"
+
+    RUN_MODE=$(read_run_mode "$TASK_FILE")
+    if [ "$RUN_MODE" = "interactive" ] || [ "$RUN_MODE" = "aymm" ]; then
+        echo "Task ${CURRENT_TASK} is marked run:${RUN_MODE} — cannot run via ralph.sh. Use Claude directly or bash ralph.sh aymm." > STOP
+        break
+    fi
+
     NEXT_STEP=$(grep -m1 '^- \[ \]' "$TASK_FILE" 2>/dev/null || echo "")
     if [ -z "$NEXT_STEP" ]; then
         echo "Warning: ${CURRENT_TASK} has no unchecked steps — skipping (check task file)"
