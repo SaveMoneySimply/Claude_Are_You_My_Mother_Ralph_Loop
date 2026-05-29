@@ -258,7 +258,10 @@ while [ ! -f STOP ]; do
 
     NEXT_STEP=$(grep -m1 '^- \[ \]' "$TASK_FILE" 2>/dev/null || echo "")
     if [ -z "$NEXT_STEP" ]; then
-        echo "Warning: ${CURRENT_TASK} has no unchecked steps — skipping (check task file)"
+        echo "Warning: ${CURRENT_TASK} has no unchecked steps — auto-closing"
+        DONE_FILE="tasks/3_done/$(date +%Y-%m-%d)-${CURRENT_TASK}.md"
+        mv "$TASK_FILE" "$DONE_FILE"
+        echo "$(date '+%Y-%m-%d') | ${CURRENT_TASK} | Auto-closed: all steps complete | [task](${DONE_FILE})" >> CHANGELOG.md
         continue
     fi
 
