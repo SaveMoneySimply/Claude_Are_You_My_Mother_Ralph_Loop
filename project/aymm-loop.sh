@@ -380,6 +380,15 @@ while [[ ! -f STOP ]]; do
         # loop.sh returned cleanly — reset provider state for next task
         PROVIDER_INDEX=0
         RATE_LIMIT_ADVANCES=0
+        # If loop.sh closed the task, do branch cleanup and move on
+        if [[ ! -f "tasks/2_active/${CURRENT_TASK}.md" ]]; then
+            post_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+            if [[ "$post_branch" == "task/${CURRENT_TASK}" ]]; then
+                git checkout main
+                git merge --ff-only "task/${CURRENT_TASK}" && git branch -d "task/${CURRENT_TASK}" || true
+            fi
+            continue
+        fi
     fi
 
     # ── Ensure task branch exists ────────────────────────────────────────────
