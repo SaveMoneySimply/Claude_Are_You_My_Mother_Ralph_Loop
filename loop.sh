@@ -117,6 +117,7 @@ log_recovery() {
 }
 
 # Pick the current task: use 2_active/ if occupied; else pull first from 1_queue/
+# In SINGLE_TASK=1 mode, never pulls from queue — returns "" when 2_active/ is empty.
 # Prints the task short name (no .md), or "" if nothing available
 pick_task() {
     local active
@@ -124,6 +125,9 @@ pick_task() {
     if [ -n "$active" ]; then
         basename "$active" .md
         return
+    fi
+    if [ "${SINGLE_TASK:-0}" = "1" ]; then
+        echo ""; return
     fi
     local queued
     queued=$(ls tasks/1_queue/*.md 2>/dev/null | head -1)
@@ -222,7 +226,9 @@ while [ ! -f STOP ]; do
     # ─── pick task via directory state machine ───────────────────────────
     CURRENT_TASK=$(pick_task)
     if [ -z "$CURRENT_TASK" ]; then
-        echo "All tasks complete" > STOP
+        if [ "${SINGLE_TASK:-0}" != "1" ]; then
+            echo "All tasks complete" > STOP
+        fi
         break
     fi
 

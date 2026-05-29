@@ -317,7 +317,8 @@ while [[ ! -f STOP ]]; do
                 break
             fi
             echo "No tasks in queue — delegating to loop.sh"
-            exec bash "${WORKDIR}/loop.sh"
+            bash "${WORKDIR}/loop.sh"
+            break
         fi
     fi
 
@@ -355,8 +356,11 @@ while [[ ! -f STOP ]]; do
             echo "All free providers exhausted — stopping (aymm-only mode)" > STOP
             break
         fi
-        echo "Escalating to Claude via loop.sh"
-        exec bash "${WORKDIR}/loop.sh"
+        echo "Escalating to Claude for task ${CURRENT_TASK} — will return to AYMM after"
+        SINGLE_TASK=1 bash "${WORKDIR}/loop.sh"
+        # loop.sh returned cleanly — reset provider state for next task
+        PROVIDER_INDEX=0
+        RATE_LIMIT_ADVANCES=0
     fi
 
     # ── Ensure task branch exists ────────────────────────────────────────────
