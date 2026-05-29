@@ -300,21 +300,19 @@ while [[ ! -f STOP ]]; do
     echo ""
     echo "── aymm iteration ${i}  $(date '+%Y-%m-%d %H:%M:%S') ──"
 
-        if [[ -n "$next_task" ]]; then
-            CURRENT_TASK="$(basename "$next_task" .md)"
-            if [[ -f "tasks/3_done/${CURRENT_TASK}.md" ]]; then
-                echo "Warning: Task '${CURRENT_TASK}' already in 3_done/ - removing stale queue file '$next_task' and skipping."
-                rm -f "$next_task"
-                # Reset CURRENT_TASK so the loop attempts to pick a new task in the next iteration.
-                CURRENT_TASK="unknown" 
-                continue
-            fi
-            mv "$next_task" "tasks/2_active/${CURRENT_TASK}.md"
-            echo "$CURRENT_TASK" > .ralph/last-task.txt
-            reset_all_failure_counts "$CURRENT_TASK"
+    # Pick task: resume from 2_active/ if occupied, else pull from 1_queue/
+    active_task="$(ls tasks/2_active/*.md 2>/dev/null | sort | head -1 || true)"
+    if [[ -n "$active_task" ]]; then
+        CURRENT_TASK="$(basename "$active_task" .md)"
+    else
         next_task="$(ls tasks/1_queue/*.md 2>/dev/null | sort | head -1 || true)"
         if [[ -n "$next_task" ]]; then
             CURRENT_TASK="$(basename "$next_task" .md)"
+            if [[ -f "tasks/3_done/${CURRENT_TASK}.md" ]]; then
+                echo "Warning: Task '${CURRENT_TASK}' already in 3_done/ - removing stale queue file and skipping."
+                rm -f "$next_task"
+                continue
+            fi
             mv "$next_task" "tasks/2_active/${CURRENT_TASK}.md"
             echo "$CURRENT_TASK" > .ralph/last-task.txt
             reset_all_failure_counts "$CURRENT_TASK"
