@@ -107,6 +107,16 @@ reset_failure_count() {
     mv "$tmp" ".ralph/aymm-failure-counters.json"
 }
 
+# Reset failure counts for all providers for a given task (called when task is first picked)
+reset_all_failure_counts() {
+    local task="$1"
+    local tmp
+    tmp="$(mktemp /tmp/aymm-counters-XXXXXX.json)"
+    jq --arg t "$task" 'with_entries(select(.key | startswith($t + "__") | not))' \
+        ".ralph/aymm-failure-counters.json" > "$tmp"
+    mv "$tmp" ".ralph/aymm-failure-counters.json"
+}
+
 # Write provider state JSON
 write_provider_state() {
     local provider="$1"
@@ -299,6 +309,7 @@ while [[ ! -f STOP ]]; do
             CURRENT_TASK="$(basename "$next_task" .md)"
             mv "$next_task" "tasks/2_active/${CURRENT_TASK}.md"
             echo "$CURRENT_TASK" > .ralph/last-task.txt
+            reset_all_failure_counts "$CURRENT_TASK"
             echo "Picked task from queue: ${CURRENT_TASK}"
         else
             echo "No tasks in queue — delegating to loop.sh"
