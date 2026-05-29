@@ -19,7 +19,8 @@ v3 phase planning is complete and two task files are queued. Queue is clean, wor
 
 1. **p1s1-timestamp-done-filenames** (in `1_queue/`) — adds `YYYY-MM-DD-` prefix to done filenames. Run: `bash ralph.sh aymm`
 2. **p2s1-engine-dir-and-mounts** (in `0_backlog/`) — moved to backlog because there's no way to tell the loop to run one task via aymm and the next via ralph.sh only. After p1s1 completes, manually move to `1_queue/` and run `bash ralph.sh` (not aymm) — step 1 does `mkdir + cp` outside the workspace.
-3. After p2s1, do **p2s2 interactively** (Claude directly): SCRIPT_DIR/WORKSPACE split across loop.sh, aymm-loop.sh, run_agent_task.sh.
+3. After p2s1, do **p2s2 interactively** (Claude directly, not via loop): promote `tasks/0_backlog/p2s2-script-dir-workspace-split.md` to context and implement — adds `ENGINE_DIR=/engine` to loop.sh + aymm-loop.sh, adds `WORKSPACE=/workspace` to run_agent_task.sh, fixes all cross-script path references. Full step-by-step is in the backlog task file.
+4. After p2s2, promote `tasks/0_backlog/p2s3-update-readme.md` to `tasks/1_queue/` and run via AYMM — rewrites README to document current system (correct folder names, all scripts, callouts, AYMM setup).
 
 ## Key files changed this session
 - `apply_changes.sh` — added ALLOWLIST filtering in all three parsing loops
