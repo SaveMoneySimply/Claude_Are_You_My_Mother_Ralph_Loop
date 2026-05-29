@@ -3,7 +3,7 @@
 > **Delete this file after reading.** It exists only to bridge sessions.
 
 ## Where we are
-Queue is empty, working tree clean on main, STOP file present (leftover from last loop run — safe to delete). Two backlog tasks are ready to promote: p2s3 (README rewrite, interactive) and p2s4 (project/ dir + e2e test, interactive). Both must be run interactively with Claude — the run-mode failsafe built this session will block any accidental loop run.
+Queue is empty, working tree clean on main, STOP file present (cleared automatically at loop startup). Two backlog tasks are ready to promote: p2s3 (README rewrite, interactive) and p2s4 (project/ dir + e2e test, interactive). Both must be run interactively with Claude — the run-mode failsafe built this session will block any accidental loop run.
 
 ## What was just done
 - Fixed `aymm-loop.sh` unbound `next_task` variable — rewrote task-pick block to mirror `loop.sh` pattern
@@ -30,7 +30,6 @@ No blockers. Two tasks to do interactively, in order:
 - `tasks/3_done/2026-05-29-p2s5-run-mode-failsafe.md` — completed this session
 
 ## Open issues to keep in mind
-- STOP file exists on disk — delete it before running the loop: `rm STOP`
 - p2s4 is interactive — the `project/` dir approach means forking the repo and putting your project in `project/`. The minimal example just needs one testable task so Ralph can run end-to-end.
 - p2s3 README should NOT mention engine extraction (abandoned) or `~/tools/ralph/`. Document the `project/` subdirectory approach instead.
 - v4 backlog has a cluster of related items (plan-task linkage, folder structure, host-only steps, STOP responsiveness) — good candidates for a planning session when v3 wraps up.
@@ -38,9 +37,6 @@ No blockers. Two tasks to do interactively, in order:
 
 ## Commands to run to resume
 ```bash
-# Clean up STOP file
-rm STOP
-
 # Verify clean state
 git status && git log --oneline -5
 
