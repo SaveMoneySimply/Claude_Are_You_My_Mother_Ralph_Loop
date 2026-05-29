@@ -49,6 +49,16 @@ assert_file_exists() {
   fi
 }
 
+setup_workspace() {
+  mkdir -p "$TESTDIR/tasks/0_backlog" "$TESTDIR/tasks/1_queue" "$TESTDIR/tasks/2_active" "$TESTDIR/tasks/3_done"
+  echo "- [ ] Step 1" > "$TESTDIR/tasks/1_queue/task.md"
+  echo "- [ ] Step 2" >> "$TESTDIR/tasks/1_queue/task.md"
+}
+
+teardown_workspace() {
+  rm -rf "$TESTDIR/tasks"
+}
+
 # Syntax checks for engine scripts
 echo "=== Syntax checks ==="
 if bash -n loop.sh 2>/dev/null; then pass "syntax: loop.sh"; else fail "syntax: loop.sh" "$(bash -n loop.sh 2>&1)"; fi
