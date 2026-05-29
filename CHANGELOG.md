@@ -15,5 +15,5 @@
 2026-05-28 | log-http-errors | handle_http_status now accepts response body file path and appends JSON error entries to .ralph/http-error-log.jsonl on non-200 status | [task](tasks/3_done/log-http-errors.md)
 2026-05-26 | ralph-v2 | Migrated to 4-stage task pipeline (0_backlog/1_queue/2_active/3_done); bash-side navigation in loop.sh; prompt.md shrunk to 11 lines; CLAUDE.md and ARCHITECTURE.md updated | [task](tasks/3_done/ralph-v2.md)
 2026-05-26 | aymm-unify | Absorbed aymm.sh into ralph.sh as `bash ralph.sh aymm` mode; updated aymm-loop.sh for new directory paths; deleted aymm.sh | [task](tasks/3_done/aymm-unify.md)
-| 2026-05-27 | aymm-test | Completed via groq | [task](tasks/3_done/aymm-test.md) |
-| 2026-05-28 | provider-status | Completed via gemini | [task](tasks/3_done/provider-status.md) |
+2026-05-27 | aymm-test | Completed via groq | [task](tasks/3_done/aymm-test.md)
+2026-05-28 | provider-status | Completed via gemini | [task](tasks/3_done/provider-status.md)
