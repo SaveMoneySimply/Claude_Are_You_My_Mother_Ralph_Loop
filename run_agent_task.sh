@@ -221,6 +221,10 @@ handle_http_status() {
             echo "Error: rate limited (429)" >&2
             exit 100
             ;;
+        503)
+            echo "Error: service unavailable (503) — treating as rate limit" >&2
+            exit 100
+            ;;
         403)
             echo "Error: forbidden (403) — provider may be exhausted" >&2
             exit 101
