@@ -435,8 +435,24 @@ main() {
     # Parse and apply file changes
     parse_and_apply_response "$tmp_response"
 
-    # Run test suite
-    run_test_command
+    # Capture what changed so we can roll back if the test fails
+    local modified_files new_files
+    modified_files=$(git -C "$SCRIPT_DIR" diff --name-only 2>/dev/null || true)
+    new_files=$(git -C "$SCRIPT_DIR" ls-files --others --exclude-standard 2>/dev/null \
+        | grep -v '^\.ralph/' || true)
+
+    # Run test — roll back any provider changes on failure
+    run_test_command || {
+        echo "Test failed — rolling back provider changes" >&2
+        if [[ -n "$modified_files" ]]; then
+            # shellcheck disable=SC2086
+            git -C "$SCRIPT_DIR" checkout HEAD -- $modified_files 2>/dev/null || true
+        fi
+        if [[ -n "$new_files" ]]; then
+            echo "$new_files" | xargs -I{} rm -f "${SCRIPT_DIR}/{}" 2>/dev/null || true
+        fi
+        exit 2
+    }
 }
 
 main "$@"
