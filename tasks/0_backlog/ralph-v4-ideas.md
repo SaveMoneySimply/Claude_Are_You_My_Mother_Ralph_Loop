@@ -41,6 +41,9 @@ When a loop step requires a host command (e.g. `docker build`, writing outside `
 **STOP file responsiveness**
 `touch STOP` didn't halt the loop quickly during the p2s1 incident — the loop was mid-escalation and the STOP check only runs at the top of the `while` loop. Options: check for STOP between escalation levels, or trap SIGTERM and write STOP on container kill. The `touch STOP` UX should be instant — currently it can take minutes to take effect if the escalation ladder is running.
 
+**Plan mode — update or remove**
+`ralph.sh plan` / `prompt-plan.md` is not wired into the current folder structure — it references `plans/*.md` and `tasks/active/` which no longer exist. Interactive planning with Claude has proven better in practice (back-and-forth produces better task files, scope can be adjusted in real-time). Options: update `prompt-plan.md` to use the current `tasks/0_backlog/` structure and `tasks/1_queue/`, or remove plan mode entirely and document that planning is done interactively. Don't touch until there's a clear reason to keep it.
+
 **Matt's Thoughts**
 
 -I need to understand what ralph.sh plan mode does and try to use it for the next planing session
