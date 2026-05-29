@@ -48,3 +48,19 @@ assert_file_exists() {
     fail "$1" "File '$2' does not exist"
   fi
 }
+
+# Syntax checks for engine scripts
+echo "=== Syntax checks ==="
+if bash -n loop.sh 2>/dev/null; then pass "syntax: loop.sh"; else fail "syntax: loop.sh" "$(bash -n loop.sh 2>&1)"; fi
+if bash -n aymm-loop.sh 2>/dev/null; then pass "syntax: aymm-loop.sh"; else fail "syntax: aymm-loop.sh" "$(bash -n aymm-loop.sh 2>&1)"; fi
+if bash -n ralph.sh 2>/dev/null; then pass "syntax: ralph.sh"; else fail "syntax: ralph.sh" "$(bash -n ralph.sh 2>&1)"; fi
+if bash -n run_agent_task.sh 2>/dev/null; then pass "syntax: run_agent_task.sh"; else fail "syntax: run_agent_task.sh" "$(bash -n run_agent_task.sh 2>&1)"; fi
+if bash -n apply_changes.sh 2>/dev/null; then pass "syntax: apply_changes.sh"; else fail "syntax: apply_changes.sh" "$(bash -n apply_changes.sh 2>&1)"; fi
+if bash -n provider-config.sh 2>/dev/null; then pass "syntax: provider-config.sh"; else fail "syntax: provider-config.sh" "$(bash -n provider-config.sh 2>&1)"; fi
+if bash -n provider-status.sh 2>/dev/null; then pass "syntax: provider-status.sh"; else fail "syntax: provider-status.sh" "$(bash -n provider-status.sh 2>&1)"; fi
+if bash -n init-firewall.sh 2>/dev/null; then pass "syntax: init-firewall.sh"; else fail "syntax: init-firewall.sh" "$(bash -n init-firewall.sh 2>&1)"; fi
+if bash -n test-providers.sh 2>/dev/null; then pass "syntax: test-providers.sh"; else fail "syntax: test-providers.sh" "$(bash -n test-providers.sh 2>&1)"; fi
+
+echo ""
+echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
+[ "$FAIL_COUNT" -eq 0 ]
