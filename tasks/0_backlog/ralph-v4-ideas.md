@@ -21,8 +21,7 @@ When a provider hits its daily limit (403 / quota-exhausted body), read the rese
 
 **Timestamp done-task filenames** ✅ done in v3
 
-**Rollback on test failure**
-When a provider writes code that fails the test gate, revert the working tree to the pre-attempt state before trying the next provider. Without this, every subsequent provider (and Claude escalation) works from a broken baseline. Implementation: `git stash` before each provider attempt, `git stash pop` on pass, `git stash drop` + restore on fail — or just `git checkout -- .` after a failure since we haven't committed. Observed failure mode: Groq broke `aymm-loop.sh` with a partial edit; Mistral and OpenRouter then received the broken file as context.
+**Rollback on test failure** ✅ already implemented in `run_agent_task.sh` (lines 445–462 — `git checkout HEAD` on failure). Bug found and fixed 2026-05-29: rollback was also reverting the task mv (1_queue → 2_active), causing the failure counter to reset every iteration. Fixed by excluding `tasks/` from the rollback scope.
 
 **Pass AYMM failure history to Claude on escalation**
 When all free providers exhaust and `loop.sh` is called as Claude fallback, inject the `previous-attempts` context from `.ralph/test-log.jsonl` into the prompt so Claude knows what was tried and broken. Currently `run_agent_task.sh` passes this context between free providers, but the handoff to `loop.sh` drops it. Claude succeeded without it in the p1s1 run, but for harder tasks it would help Claude avoid repeating the same broken approaches.
