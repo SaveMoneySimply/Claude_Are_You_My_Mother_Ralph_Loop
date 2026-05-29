@@ -442,11 +442,14 @@ main() {
     # Parse and apply file changes
     parse_and_apply_response "$tmp_response"
 
-    # Capture what changed so we can roll back if the test fails
+    # Capture what changed so we can roll back if the test fails.
+    # Exclude tasks/ — the task mv (1_queue → 2_active) happened before this script
+    # was called and must not be reverted, or the loop re-queues the task every iteration.
     local modified_files new_files
-    modified_files=$(git -C "$SCRIPT_DIR" diff --name-only 2>/dev/null || true)
+    modified_files=$(git -C "$SCRIPT_DIR" diff --name-only 2>/dev/null \
+        | grep -v '^tasks/' || true)
     new_files=$(git -C "$SCRIPT_DIR" ls-files --others --exclude-standard 2>/dev/null \
-        | grep -v '^\.ralph/' || true)
+        | grep -v '^\.ralph/' | grep -v '^tasks/' || true)
 
     # Run test — roll back any provider changes on failure
     run_test_command || {
