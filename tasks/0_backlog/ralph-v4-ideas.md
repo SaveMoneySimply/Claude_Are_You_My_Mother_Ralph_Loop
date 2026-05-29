@@ -33,6 +33,14 @@ When aymm-loop.sh escalates to Claude (`SINGLE_TASK=1 bash loop.sh`), loop.sh's 
 **Single-attempt-then-switch on task failure (consider alongside rollback)**
 Currently retries the same provider up to 3× on task failure before switching. Once rollback is in place, a failed attempt is clean (no broken baseline), but retrying the same provider quickly can trigger 429s. Consider reducing to 1 attempt per provider for code-writing failures — log the result, pass it as context to the next provider, move on. Keep the retry count for rate-limit recovery (which is already handled separately).
 
+**Host-only step marker + fast-fail for environmental constraints**
+When a loop step requires a host command (e.g. `docker build`, writing outside `/workspace`), the loop currently burns the full escalation ladder before hitting BLOCKED — every model tries and fails, all charged. Two fixes needed:
+1. Task file format: a step marked `HOST:` (or similar) gets skipped by the loop and written to a "run on host" note file instead of attempted. The task pauses at that step until the human runs it and resumes.
+2. Fast-fail exit code: if the agent detects an environmental constraint (no `docker` binary, no network to a required host, etc.), return exit code 3 — loop skips escalation and goes straight to BLOCKED. Observed failure mode: p2s1 step 4 (`docker build`) exhausted the full escalation ladder inside the container, burning significant usage on a hard impossibility.
+
+**STOP file responsiveness**
+`touch STOP` didn't halt the loop quickly during the p2s1 incident — the loop was mid-escalation and the STOP check only runs at the top of the `while` loop. Options: check for STOP between escalation levels, or trap SIGTERM and write STOP on container kill. The `touch STOP` UX should be instant — currently it can take minutes to take effect if the escalation ladder is running.
+
 **Matt's Thoughts**
 
 -I need to understand what ralph.sh plan mode does and try to use it for the next planing session

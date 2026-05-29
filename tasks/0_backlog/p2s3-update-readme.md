@@ -3,7 +3,7 @@
 **Model:** sonnet · **Effort:** medium · **Tokens estimated:** 8000 · **Attempts:** 0/3
 **Allowed files:** README.md
 
-> Run via AYMM — no prerequisites. Engine extraction approach was abandoned; README should document the project/ subdirectory approach instead.
+> **Run interactively with Claude (not AYMM)** — README rewrite requires judgment about tone, structure, and what to include. Free providers produce technically passable but flat output for this kind of task. No prerequisites.
 
 ## Context
 The current README describes an older version of Ralph (v1/v2). It uses wrong folder names (`tasks/active/`, `tasks/done/`), doesn't mention most of the engine scripts, and doesn't explain the AYMM multi-provider system in enough depth for someone to actually try it. Goal: someone new should be able to read the README, understand what Ralph + AYMM does, and get it running.
