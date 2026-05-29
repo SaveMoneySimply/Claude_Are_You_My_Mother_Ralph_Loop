@@ -160,16 +160,38 @@ bundle_context() {
         fi
     fi
 
-    # Append content of files mentioned in the step (backtick or single-quoted names)
-    local fname
-    while IFS= read -r fname; do
-        [[ -z "$fname" ]] && continue
-        if [[ -f "${SCRIPT_DIR}/${fname}" ]]; then
-            prompt="${prompt}<context name=\"file:${fname}\">"$'\n'
-            prompt="${prompt}$(cat "${SCRIPT_DIR}/${fname}")"$'\n'
-            prompt="${prompt}</context>"$'\n\n'
-        fi
-    done < <(echo "$next_step" | grep -oE '[a-zA-Z0-9_./\-]+\.(sh|md|js|ts|py|json|txt)' || true)
+    # Inject files listed in the step's -- files: annotation (format: path or path:start-end)
+    local step_files_spec
+    step_files_spec="$(grep -oP '(?<=-- files: ).*$' "${SCRIPT_DIR}/.ralph/last-step.txt" 2>/dev/null | tr -d '\r\n' || true)"
+    if [[ -n "$step_files_spec" ]]; then
+        IFS=',' read -ra file_specs <<< "$step_files_spec"
+        for spec in "${file_specs[@]}"; do
+            spec="$(echo "$spec" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')"
+            [[ -z "$spec" ]] && continue
+            local fpath frange
+            if [[ "$spec" == *:* ]] && [[ "${spec##*:}" =~ ^[0-9]+-[0-9]+$ ]]; then
+                fpath="${spec%%:*}"
+                frange="${spec##*:}"
+            else
+                fpath="$spec"
+                frange=""
+            fi
+            local full_path="${SCRIPT_DIR}/${fpath}"
+            if [[ -f "$full_path" ]]; then
+                prompt="${prompt}<context name=\"file:${fpath}\">"$'\n'
+                if [[ -n "$frange" ]]; then
+                    local rstart rend
+                    rstart="${frange%%-*}"
+                    rend="${frange##*-}"
+                    prompt="${prompt}$(sed -n "${rstart},${rend}p" "$full_path")"$'\n'
+                    prompt="${prompt}(lines ${rstart}-${rend} of ${fpath})"$'\n'
+                else
+                    prompt="${prompt}$(cat "$full_path")"$'\n'
+                fi
+                prompt="${prompt}</context>"$'\n\n'
+            fi
+        done
+    fi
 
     prompt="${prompt}## Response format"$'\n\n'
     prompt="${prompt}Tasks involve either creating new files or editing existing ones. Use the appropriate format:"$'\n\n'

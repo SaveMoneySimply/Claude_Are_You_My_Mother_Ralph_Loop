@@ -44,7 +44,7 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 # **Parent task:** original-name · **Split depth:** 1
 
 ## Steps
-- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <command that verifies THIS specific change was made, e.g. grep -q 'key-string' file.sh or test -f newfile.sh — NOT a repeat of the global test. Ask: "what's the cheapest check that would catch the AI returning valid-but-wrong code?">
+- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <command that verifies THIS specific change was made, e.g. grep -q 'key-string' file.sh — NOT a repeat of the global test> -- files: path/to/file.sh:start-end, other/file.sh
 - [ ] Step 2: ...
 
 ## Smoke test
@@ -68,6 +68,7 @@ These habits produce better outcomes, especially with AYMM free providers:
 **Steps**
 - One logical change per step. If a step touches more than two files or has more than one distinct thing to verify, split it.
 - The `-- test:` check should be the cheapest command that would catch an AI returning plausible-but-wrong output. A `grep -q 'key-string' file.sh` is better than re-running the full test suite for a single line change.
+- The `-- files:` annotation controls what file content gets injected as read context for this step. Format: `-- files: path1:start-end, path2, path3:50-90`. Use line ranges to inject only the relevant function rather than the whole script — this is the primary tool for keeping free-provider payloads small. If omitted, no files are auto-injected. Always list files explicitly; the old auto-grep approach is gone.
 - Avoid steps that require host-only commands inside the loop (`docker build`, writing outside `/workspace`, network calls to internal services). Mark those tasks `**Run:** interactive` or put the host command in the smoke test instead.
 
 **AYMM (free provider) tasks**
