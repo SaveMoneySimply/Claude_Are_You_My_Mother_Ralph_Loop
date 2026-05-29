@@ -22,3 +22,4 @@
 2026-05-29 | 02-skip-already-done-tasks | Guard loop against stale queue/active files resurrected by git merges | [task](tasks/3_done/02-skip-already-done-tasks.md)
 2026-05-29 | per-task-write-allowlist | Add opt-in Allowed files field to task headers; apply_changes.sh skips out-of-scope blocks; run_agent_task.sh passes allowlist from task file | [task](tasks/3_done/per-task-write-allowlist.md)
 2026-05-29 | p2s5-run-mode-failsafe | Add run-mode failsafe to loop.sh and aymm-loop.sh | [task](tasks/3_done/2026-05-29-p2s5-run-mode-failsafe.md)
+2026-05-29 | hello-world | Create project/hello.sh that outputs Hello, Ralph! | [task](tasks/3_done/2026-05-29-hello-world.md)
