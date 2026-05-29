@@ -2,6 +2,7 @@
 
 <!-- Append-only. One entry per completed task. -->
 <!-- Format: YYYY-MM-DD | task-name | one-line description | [task](tasks/done/name.md) -->
+2026-05-29 | p1s1-timestamp-done-filenames | Prefix done task files with YYYY-MM-DD in aymm-loop.sh, loop.sh, and prompt.md | [task](tasks/3_done/2026-05-29-p1s1-timestamp-done-filenames.md)
 2026-05-29 | validate-apply-changes | Add has_provider() to provider-config.sh for provider name validation | [task](tasks/3_done/validate-apply-changes.md)
 2026-05-29 | aymm-only-mode | Add --only flag to ralph.sh aymm to stop instead of escalating to Claude when free providers exhausted | [task](tasks/3_done/aymm-only-mode.md)
 2026-05-29 | validate-per-step-test | Add loop_version() and provider_count() to provider-config.sh to validate per-step test extraction | [task](tasks/3_done/validate-per-step-test.md)
