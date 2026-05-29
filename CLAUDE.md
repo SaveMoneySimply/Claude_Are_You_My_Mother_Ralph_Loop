@@ -39,6 +39,7 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 **Model:** sonnet · **Effort:** high · **Tokens estimated:** 50000 · **Attempts:** 0/3
 **Test command:** <only include if different from ARCHITECTURE.md default — omit to use the default>
 **Allowed files:** aymm-loop.sh, tasks/2_active/my-task.md
+**Run:** interactive
 # Sub-tasks only — omit these lines for top-level tasks:
 # **Parent task:** original-name · **Split depth:** 1
 
@@ -50,7 +51,32 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 <what to manually verify after the loop completes this task>
 ```
 
+**`**Run:**` (optional)** — controls which execution mode is allowed to pick up the task. `loop.sh` and `aymm-loop.sh` both check this field and write STOP with a clear error if the mode doesn't match. Values:
+- `interactive` — Claude directly only; neither `ralph.sh` nor `ralph.sh aymm` will run it
+- `ralph` — `bash ralph.sh` only; `ralph.sh aymm` will refuse
+- `aymm` — `bash ralph.sh aymm` only; `ralph.sh` will refuse
+- `any` or absent — no restriction (default)
+
+Use `interactive` for tasks involving judgment, UI review, or host-only commands (e.g. `docker build`). This prevents accidentally burning usage on tasks the loop can't complete.
+
 **`**Allowed files:**` (optional)** — comma-separated paths (relative to workspace root) that `apply_changes.sh` is permitted to write. Any `<file>`, `<edit>`, or `<delete>` block targeting an unlisted path is skipped and logged to stderr. Absent = all paths permitted (backward compatible). Use this for tasks scoped to specific files when running free-tier providers, which have been observed to emit out-of-scope file blocks.
+
+### Writing good task files
+
+These habits produce better outcomes, especially with AYMM free providers:
+
+**Steps**
+- One logical change per step. If a step touches more than two files or has more than one distinct thing to verify, split it.
+- The `-- test:` check should be the cheapest command that would catch an AI returning plausible-but-wrong output. A `grep -q 'key-string' file.sh` is better than re-running the full test suite for a single line change.
+- Avoid steps that require host-only commands inside the loop (`docker build`, writing outside `/workspace`, network calls to internal services). Mark those tasks `**Run:** interactive` or put the host command in the smoke test instead.
+
+**AYMM (free provider) tasks**
+- Always set `**Allowed files:**` for AYMM tasks. Free providers regularly emit file blocks for files they shouldn't touch (test files, unrelated scripts, the task file itself). Scoping to specific files prevents silent corruption.
+- Keep token estimates honest — if the actual output exceeds 2× the estimate the loop stops. Under-estimating wastes a run; over-estimating is fine.
+- Prefer `<edit>` blocks over full `<file>` rewrites in your step descriptions. Full rewrites from free providers frequently truncate or drop functions.
+
+**Done filenames**
+Completed tasks are moved to `tasks/3_done/YYYY-MM-DD-<name>.md` — the date prefix is added automatically so done files sort chronologically.
 
 ### Model and effort options
 
@@ -153,7 +179,7 @@ Tasks flow through four directories driven entirely by bash — the agent never 
 2. **Loop picks it up** — bash moves it to `tasks/2_active/`, extracts the next unchecked step, injects it into the prompt
 3. **Agent executes the step**, marks it `[x]` in the task file, writes pass/fail
 4. **On final-step pass**:
-   - Agent commits, moves file to `tasks/3_done/`
+   - Agent commits, moves file to `tasks/3_done/YYYY-MM-DD-<name>.md` (date prefix added automatically)
    - Agent appends entry to `CHANGELOG.md`
    - If `ARCHITECTURE.md` needs updating: write proposal to `ARCHITECTURE_REVIEW.md` and STOP
    - If operational behavior changed: sweep `routines/`
