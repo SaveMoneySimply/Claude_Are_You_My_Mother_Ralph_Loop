@@ -3,7 +3,7 @@
 **Model:** sonnet · **Effort:** medium · **Tokens estimated:** 8000 · **Attempts:** 0/3
 **Allowed files:** README.md
 
-> Run via AYMM after p2s1 and p2s2 are complete — the README should document the final architecture (engine extraction, dual-volume mount, ~/tools/ralph/).
+> Run via AYMM — no prerequisites. Engine extraction approach was abandoned; README should document the project/ subdirectory approach instead.
 
 ## Context
 The current README describes an older version of Ralph (v1/v2). It uses wrong folder names (`tasks/active/`, `tasks/done/`), doesn't mention most of the engine scripts, and doesn't explain the AYMM multi-provider system in enough depth for someone to actually try it. Goal: someone new should be able to read the README, understand what Ralph + AYMM does, and get it running.
@@ -13,7 +13,7 @@ Matt's specific asks:
 - Explain what each script does (ralph.sh, loop.sh, aymm-loop.sh, run_agent_task.sh, apply_changes.sh, provider-config.sh, init-firewall.sh, prompt.md)
 - Explain how to run each mode and what it does
 - Explain the callouts: STOP file, ARCHITECTURE_REVIEW.md pattern, BLOCKED.md, phone notifications via ntfy
-- Cover the engine extraction: ~/tools/ralph/ as the engine, projects stay clean
+- Explain how to use Ralph on your own project: fork the repo, put your project in `project/`, point `ARCHITECTURE.md` at it — engine scripts stay at repo root, project lives in `project/`
 
 ## Steps
 - [ ] Step 1: Read `README.md`, `CLAUDE.md` (task format section), `ARCHITECTURE.md`, and `provider-config.sh` (provider list) to understand the current state of the system before writing anything — done when: you have read all four files -- test: true

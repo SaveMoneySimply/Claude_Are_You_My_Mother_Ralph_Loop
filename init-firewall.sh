@@ -77,4 +77,4 @@ fi
 
 LOOP="${LOOP_SCRIPT:-loop.sh}"
 exec su -s /bin/bash claude -c \
-    "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && bash /workspace/${LOOP}"
+    "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && bash /workspace/${LOOP:-loop.sh}"

@@ -1,5 +1,7 @@
 # Task — engine-dir-and-mounts
 
+**Status: SUPERSEDED** — engine extraction approach abandoned in favour of a `project/` subdirectory within the repo. Changes from Steps 2 and 3 have been reverted. See ralph-v4-ideas.md for context.
+
 **Model:** sonnet · **Effort:** medium · **Tokens estimated:** 8000 · **Attempts:** 0/3
 **Test command:** bash -n ralph.sh && bash -n init-firewall.sh
 **Allowed files:** ralph.sh, init-firewall.sh
@@ -11,11 +13,11 @@ Engine scripts need to live in `~/tools/ralph/` and be mounted read-only as `/en
 After this task, SCRIPT_DIR in engine scripts still points to /workspace (scripts run from workspace mount, not /engine). The SCRIPT_DIR/WORKSPACE split is a separate task (p2s2, done interactively).
 
 ## Steps
-- [ ] Step 1: Run shell command: `mkdir -p ~/tools/ralph && cp /workspace/loop.sh /workspace/aymm-loop.sh /workspace/run_agent_task.sh /workspace/apply_changes.sh /workspace/provider-config.sh /workspace/provider-status.sh /workspace/test-providers.sh /workspace/prompt.md /workspace/prompt-aymm.md /workspace/prompt-plan.md /workspace/prompt-split.md ~/tools/ralph/` — done when: all engine scripts exist in ~/tools/ralph/ -- test: test -f ~/tools/ralph/loop.sh && test -f ~/tools/ralph/aymm-loop.sh && test -f ~/tools/ralph/run_agent_task.sh
+- [x] Step 1: Run shell command: `mkdir -p ~/tools/ralph && cp /workspace/loop.sh /workspace/aymm-loop.sh /workspace/run_agent_task.sh /workspace/apply_changes.sh /workspace/provider-config.sh /workspace/provider-status.sh /workspace/test-providers.sh /workspace/prompt.md /workspace/prompt-aymm.md /workspace/prompt-plan.md /workspace/prompt-split.md ~/tools/ralph/` — done when: all engine scripts exist in ~/tools/ralph/ -- test: test -f ~/tools/ralph/loop.sh && test -f ~/tools/ralph/aymm-loop.sh && test -f ~/tools/ralph/run_agent_task.sh
 
-- [ ] Step 2: Edit `ralph.sh` docker run block — add `-v "${HOME}/tools/ralph:/engine:ro" \` as a new line immediately after the `-v "$(pwd):/workspace" \` line — done when: ralph.sh contains `/engine:ro` -- test: grep -q '/engine:ro' ralph.sh
+- [x] Step 2: Edit `ralph.sh` docker run block — add `-v "${HOME}/tools/ralph:/engine:ro" \` as a new line immediately after the `-v "$(pwd):/workspace" \` line — done when: ralph.sh contains `/engine:ro` -- test: grep -q '/engine:ro' ralph.sh
 
-- [ ] Step 3: Edit `init-firewall.sh` line 78 — change `bash /workspace/${LOOP}` to `bash /engine/${LOOP:-loop.sh}` — done when: init-firewall.sh references /engine/ -- test: grep -q '/engine/' init-firewall.sh
+- [x] Step 3: Edit `init-firewall.sh` line 78 — change `bash /workspace/${LOOP}` to `bash /engine/${LOOP:-loop.sh}` — done when: init-firewall.sh references /engine/ -- test: grep -q '/engine/' init-firewall.sh
 
 - [ ] Step 4: Rebuild Docker image so the updated init-firewall.sh is baked in: run `docker build -t ralph:latest /workspace` — done when: image rebuilds without error -- test: docker image inspect ralph:latest --format '{{.Created}}' | grep -q '2026'
 
