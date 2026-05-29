@@ -51,6 +51,9 @@ Plans and tasks are currently unconnected — `close_task()` infers a phase from
 
 Also needs a decision on folder structure: currently plans, tasks, and ideas are all mixed in `tasks/0_backlog/`. Clean separation would be `plans/` (phases with completion criteria), `tasks/` pipeline (unchanged), and `ideas/` (long-running files like `ralph-v4-ideas.md` that never complete). The ideas file is a different kind of thing from a plan — it accumulates rather than completes and shouldn't be in the task pipeline at all.
 
+**Move task archival from agent to bash**
+Currently the agent moves `tasks/2_active/<name>.md` to `tasks/3_done/YYYY-MM-DD-<name>.md` and appends to `CHANGELOG.md` as part of executing the final step — instructed by `prompt.md`. This is mechanical state management that belongs in the loop, not a judgment call that needs the agent. Moving it to bash (`loop.sh` / `aymm-loop.sh`) on a pass result would: make the agent's job simpler (fewer things to get wrong on the final step), make archival more reliable (not dependent on the agent following instructions precisely), and keep `prompt.md` focused on just executing the step. Would require loop.sh to detect when a task file has been closed by checking whether `2_active/<name>.md` still exists after a pass.
+
 **Matt's Thoughts**
 
 -I need to understand what ralph.sh plan mode does and try to use it for the next planing session
