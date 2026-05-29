@@ -20,3 +20,7 @@ Utility that queries `https://openrouter.ai/api/v1/models`, filters for `:free` 
 When a provider hits its daily limit (403 / quota-exhausted body), read the reset timestamp from response headers (`x-ratelimit-reset`, `Retry-After`) and sleep exactly that duration rather than writing STOP. Only worth building once we have real response examples from each provider hitting their daily limit — inspect `.ralph/http-error-log.jsonl` after a real quota hit.
 
 **Timestamp done-task filenames** ✅ done in v3
+
+**Matt's Thoughts
+
+-We need to make sure the README files is updated so someone can try this out, needs to explain the task folder structure and what scripts to run and the callouts and what they do.

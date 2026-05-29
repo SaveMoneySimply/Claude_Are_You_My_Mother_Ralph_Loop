@@ -15,12 +15,11 @@ v3 phase planning is complete and two task files are queued. Queue is clean, wor
 - Completed v3 phase planning: archived ralph-v3-ideas.md, created ralph-v4-ideas.md, queued two task files, wrote ARCHITECTURE_REVIEW.md for phases section update
 
 ## Current blocker / next step
-**No blockers.** Queue has two tasks ready to run in order:
+**No blockers.** One task in the queue, two in backlog waiting for manual promotion:
 
-1. **p1s1-timestamp-done-filenames** — adds `YYYY-MM-DD-` prefix to done filenames; safe for AYMM. Run: `bash ralph.sh aymm`
-2. **p2s1-engine-dir-and-mounts** — creates `~/tools/ralph/`, adds `/engine:ro` mount to ralph.sh and init-firewall.sh; must run via **`bash ralph.sh`** (not aymm) because step 1 runs `mkdir + cp` outside the workspace which free providers can't do via XML blocks
-
-After p2s1, do **p2s2 interactively** (Claude directly): SCRIPT_DIR/WORKSPACE split across loop.sh, aymm-loop.sh, run_agent_task.sh.
+1. **p1s1-timestamp-done-filenames** (in `1_queue/`) — adds `YYYY-MM-DD-` prefix to done filenames. Run: `bash ralph.sh aymm`
+2. **p2s1-engine-dir-and-mounts** (in `0_backlog/`) — moved to backlog because there's no way to tell the loop to run one task via aymm and the next via ralph.sh only. After p1s1 completes, manually move to `1_queue/` and run `bash ralph.sh` (not aymm) — step 1 does `mkdir + cp` outside the workspace.
+3. After p2s1, do **p2s2 interactively** (Claude directly): SCRIPT_DIR/WORKSPACE split across loop.sh, aymm-loop.sh, run_agent_task.sh.
 
 ## Key files changed this session
 - `apply_changes.sh` — added ALLOWLIST filtering in all three parsing loops
@@ -48,10 +47,11 @@ git status && git log --oneline -5
 # Check queue
 ls tasks/1_queue/ tasks/2_active/
 
-# Run p1s1 (timestamp filenames) — safe for AYMM
+# Run p1s1 (timestamp filenames) — only task in queue, safe for AYMM
 bash ralph.sh aymm
 
-# After p1s1 completes, run p2s1 — must use ralph.sh not aymm
+# After p1s1 completes, manually promote p2s1 then run via ralph.sh (not aymm)
+mv tasks/0_backlog/p2s1-engine-dir-and-mounts.md tasks/1_queue/
 bash ralph.sh
 
 # After both complete, do p2s2 interactively with Claude
