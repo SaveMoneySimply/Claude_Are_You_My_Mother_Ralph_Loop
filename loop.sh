@@ -6,6 +6,8 @@ set -uo pipefail
 WORKDIR=/workspace
 cd "$WORKDIR"
 mkdir -p .ralph tasks/{0_backlog,1_queue,2_active,3_done}
+rm -f "${WORKDIR}/STOP"
+echo "loop.sh started, STOP cleared"
 
 # Step number used to force a split on the next iteration
 FORCE_SPLIT_STEP=50
