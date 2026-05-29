@@ -21,6 +21,6 @@ When a provider hits its daily limit (403 / quota-exhausted body), read the rese
 
 **Timestamp done-task filenames** ✅ done in v3
 
-**Matt's Thoughts
+**Matt's Thoughts**
 
--We need to make sure the README files is updated so someone can try this out, needs to explain the task folder structure and what scripts to run and the callouts and what they do.
+-I need to understand what ralph.sh plan mode does and try to use it for the next planing session

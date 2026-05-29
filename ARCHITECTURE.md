@@ -16,8 +16,16 @@ is invoked. If a free AI's output passes the test suite, Claude never gets invol
 
 ## Phases
 
-### Phase 1 — <name>
-<one-sentence description of what this phase builds>
+**Phase 1 — Polish**
+- p1s1: Timestamp filenames in tasks/3_done/ (YYYY-MM-DD-<name>.md for chronological ordering)
+
+**Phase 2 — Engine Extraction**
+- p2s1: Create ~/tools/ralph/, mount as /engine:ro in container, update init-firewall.sh exec path
+- p2s2: SCRIPT_DIR/WORKSPACE split in engine scripts (loop.sh, aymm-loop.sh, run_agent_task.sh)
+
+**After Phase 2:** Point Ralph at an external project to validate end-to-end.
+
+**Deferred to v4:** AYMM-all mode, OpenRouter model checker, daily quota reset detection.
 
 # Add more phases as work is planned
 
