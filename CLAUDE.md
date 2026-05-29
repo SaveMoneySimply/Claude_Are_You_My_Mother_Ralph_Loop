@@ -38,6 +38,7 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 
 **Model:** sonnet · **Effort:** high · **Tokens estimated:** 50000 · **Attempts:** 0/3
 **Test command:** <only include if different from ARCHITECTURE.md default — omit to use the default>
+**Allowed files:** aymm-loop.sh, tasks/2_active/my-task.md
 # Sub-tasks only — omit these lines for top-level tasks:
 # **Parent task:** original-name · **Split depth:** 1
 
@@ -48,6 +49,8 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 ## Smoke test
 <what to manually verify after the loop completes this task>
 ```
+
+**`**Allowed files:**` (optional)** — comma-separated paths (relative to workspace root) that `apply_changes.sh` is permitted to write. Any `<file>`, `<edit>`, or `<delete>` block targeting an unlisted path is skipped and logged to stderr. Absent = all paths permitted (backward compatible). Use this for tasks scoped to specific files when running free-tier providers, which have been observed to emit out-of-scope file blocks.
 
 ### Model and effort options
 
