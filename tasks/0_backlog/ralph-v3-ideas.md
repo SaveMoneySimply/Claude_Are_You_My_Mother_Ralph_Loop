@@ -58,3 +58,22 @@ When a provider hits its daily limit (403 / quota-exhausted body), read the rese
 
 **Prerequisite: log full HTTP error responses** ✅ done
 `.ralph/http-error-log.jsonl` now captures full response body + status on every non-200. Next step: hit a real daily limit and inspect the log to see what each provider returns.
+
+**AYMM-only mode (`bash ralph.sh aymm --only`)** → queued as `tasks/1_queue/aymm-only-mode.md`
+Stop the loop when all free providers are exhausted rather than falling back to Claude. Writes a clear STOP message. Useful for overnight runs where you want free-only execution and a notification if it gets stuck, not silent Claude spending.
+
+**AYMM-all mode (`bash ralph.sh aymm --all`)**
+Run the same task through every provider regardless of whether an earlier one passes. Two distinct sub-modes:
+
+- `--all --pick` — run all providers, then ask Claude to pick the best passing response. Good when provider quality varies and you want insurance without manual review.
+- `--all --show` — run all providers, display each diff side by side, human picks. Good for understanding where providers agree vs diverge.
+
+Merging code diffs is not worth attempting — too much ambiguity when providers make different structural choices. "Pick best" and "show all" are both tractable; "merge" is not.
+
+Open design questions before building:
+- Sequential (simpler, slower) or parallel (faster, shared-state harder)?
+- What does "best" mean for `--pick`? Passes step test + fewest lines changed? Claude judgment?
+- How to display diffs clearly in the terminal for `--show`?
+
+**Timestamp done-task filenames for chronological ordering**
+`tasks/3_done/` files accumulate in alphabetical order, not completion order. Prefix filenames with `YYYY-MM-DD-` at close time so `ls tasks/3_done/` reads as a timeline. Would need a small change to `close_task()` in `aymm-loop.sh` and the equivalent in `loop.sh`.
