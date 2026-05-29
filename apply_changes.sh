@@ -32,9 +32,13 @@ while IFS= read -r -d $'\x00' block; do
         continue
     fi
     tmp="$(mktemp /tmp/aymm-edit-XXXXXX.txt)"
-    awk -v s="$start" -v e="$end_line" -v rep="$content" \
-        'NR==s{print rep; skip=1} skip && NR<=e{next} {skip=0; print}' \
+    tmp_rep="$(mktemp /tmp/aymm-rep-XXXXXX.txt)"
+    printf '%s' "$content" > "$tmp_rep"
+    # awk -v can't pass multi-line content; read replacement from a file instead
+    awk -v s="$start" -v e="$end_line" -v rep_file="$tmp_rep" \
+        'NR==s{while((getline line < rep_file)>0) print line; skip=1} skip && NR<=e{next} {skip=0; print}' \
         "$full_path" > "$tmp"
+    rm -f "$tmp_rep"
     mv "$tmp" "$full_path"
     echo "Edited: $fpath (lines ${start}-${end_line})"
     files_written=$(( files_written + 1 ))
