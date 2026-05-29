@@ -318,7 +318,14 @@ parse_and_apply_response() {
     printf '%s' "$text_content" > "$tmp_text"
     # Persist for test log — run_test_command() reads this to record what was tried
     printf '%s' "$text_content" > "${SCRIPT_DIR}/.ralph/last-response.txt"
-    bash "${SCRIPT_DIR}/apply_changes.sh" "$tmp_text" "$SCRIPT_DIR"
+    local allowlist=""
+    local last_task_name
+    last_task_name="$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null || echo "")"
+    local at_file="${SCRIPT_DIR}/tasks/2_active/${last_task_name}.md"
+    if [[ -n "$last_task_name" && -f "$at_file" ]]; then
+        allowlist="$(grep -oP '(?<=\*\*Allowed files:\*\* ).*' "$at_file" | head -1 || true)"
+    fi
+    bash "${SCRIPT_DIR}/apply_changes.sh" "$tmp_text" "$SCRIPT_DIR" "$allowlist"
     local rc=$?
     rm -f "$tmp_text"
     return $rc
