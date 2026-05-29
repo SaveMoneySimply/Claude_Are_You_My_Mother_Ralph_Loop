@@ -17,3 +17,4 @@
 2026-05-26 | aymm-unify | Absorbed aymm.sh into ralph.sh as `bash ralph.sh aymm` mode; updated aymm-loop.sh for new directory paths; deleted aymm.sh | [task](tasks/3_done/aymm-unify.md)
 2026-05-27 | aymm-test | Completed via groq | [task](tasks/3_done/aymm-test.md)
 2026-05-28 | provider-status | Completed via gemini | [task](tasks/3_done/provider-status.md)
+| 2026-05-29 | 01-fix-changelog-format | Completed via gemini | [task](tasks/3_done/01-fix-changelog-format.md) |
