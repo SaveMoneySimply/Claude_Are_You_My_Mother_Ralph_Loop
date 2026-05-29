@@ -70,3 +70,11 @@ loop_version() {
 provider_count() {
     echo "${#PROVIDERS[@]}"
 }
+
+has_provider() {
+    local name="$1"
+    for p in "${PROVIDERS[@]}"; do
+        [[ "$p" == "$name" ]] && return 0
+    done
+    return 1
+}
