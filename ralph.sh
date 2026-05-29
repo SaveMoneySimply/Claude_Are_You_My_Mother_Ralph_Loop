@@ -44,6 +44,8 @@ AUTH_MOUNT=""
 AUTH_ENV=""
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+elif [ -f "$CLAUDE_DIR/.credentials.json" ]; then
+    AUTH_MOUNT="-v ${CLAUDE_DIR}:/home/claude/.claude"
 fi
 
 PROVIDER_ENV=""
