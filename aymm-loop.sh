@@ -308,7 +308,7 @@ while [[ ! -f STOP ]]; do
         next_task="$(ls tasks/1_queue/*.md 2>/dev/null | sort | head -1 || true)"
         if [[ -n "$next_task" ]]; then
             CURRENT_TASK="$(basename "$next_task" .md)"
-            if [[ -f "tasks/3_done/${CURRENT_TASK}.md" ]]; then
+            if compgen -G "tasks/3_done/*-${CURRENT_TASK}.md" > /dev/null 2>&1; then
                 echo "Warning: Task '${CURRENT_TASK}' already in 3_done/ - removing stale queue file and skipping."
                 rm -f "$next_task"
                 continue

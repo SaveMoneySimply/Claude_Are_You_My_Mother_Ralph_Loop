@@ -136,7 +136,7 @@ pick_task() {
     if [ -n "$queued" ]; then
         local task_name
         task_name=$(basename "$queued" .md)
-        if [ -f "tasks/3_done/${task_name}.md" ]; then
+        if compgen -G "tasks/3_done/*-${task_name}.md" > /dev/null 2>&1; then
             echo "Warning: '${task_name}' already in 3_done/ — removing stale queue entry" >&2
             rm "$queued"
             echo ""; return
