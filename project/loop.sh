@@ -178,6 +178,7 @@ build_step_prompt() {
         echo "Task file: ${task_file}"
         echo ""
         echo "### Next step to execute"
+        # Strip -- test: and -- files: annotations — agent implements from spec, not test
         echo "${next_step}" | sed 's/[[:space:]]*-- test:.*$//' | sed 's/[[:space:]]*-- files:.*$//'
         echo ""
         echo "### Full task file"
