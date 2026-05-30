@@ -116,7 +116,7 @@ ralph_init() {
     apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|bash "${WORKDIR}/run_agent_task.sh"|bash "${WORKDIR}/ralph-aymm/run_agent_task.sh"|'
 
     echo "  Writing ARCHITECTURE.md..."
-    cat << EOF > ARCHITECTURE.md
+    cat << 'EOF' > ARCHITECTURE.md
 # Project Name - One-line description
 
 ## Stack
@@ -164,13 +164,13 @@ EOF
     cp "$SCRIPT_DIR/prompt.md" prompt.md
 
     echo "  Writing CHANGELOG.md..."
-    cat << EOF > CHANGELOG.md
+    cat << 'EOF' > CHANGELOG.md
 # Changelog
 All notable changes to this project will be documented in this file.
 EOF
 
     echo "  Writing .gitignore..."
-    cat << EOF > .gitignore
+    cat << 'EOF' > .gitignore
 STOP
 .ralph/
 node_modules/
