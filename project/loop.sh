@@ -264,15 +264,17 @@ while [ ! -f STOP ]; do
 
     NEXT_STEP=$(grep -m1 '^- \[ \]' "$TASK_FILE" 2>/dev/null || echo "")
     if [ -z "$NEXT_STEP" ]; then
+    if [ -z "$NEXT_STEP" ]; then
         echo "Warning: ${CURRENT_TASK} has no unchecked steps — auto-closing"
         DONE_FILE="tasks/3_done/$(date +%Y-%m-%d)-${CURRENT_TASK}.md"
         mv "$TASK_FILE" "$DONE_FILE"
         echo "$(date '+%Y-%m-%d') | ${CURRENT_TASK} | Auto-closed: all steps complete | [task](${DONE_FILE})" >> CHANGELOG.md
+        git add "tasks/3_done/${DONE_FILE##*/}" CHANGELOG.md
+        git commit -m "${CURRENT_TASK}: close task"
         rm -f .ralph/iter-*.json .ralph/iter-*-stderr.log .ralph/iter-*-task.txt
         rm -f .ralph/last-test-error.txt
         continue
     fi
-
     # ─── determine model/effort from escalation state ───────────────────
 
     load_recovery "$CURRENT_TASK"
@@ -353,16 +355,29 @@ while [ ! -f STOP ]; do
     if [ "$STEP_SPEC" = "split" ] && [ "$RESULT" = "pass" ]; then
         # Split succeeded — sub-tasks are in tasks/1_queue/; clear original recovery state
         log_recovery "$CURRENT_TASK" "split" "split" "pass" "$ITER_TOKENS"
-        rm -f ".ralph/${CURRENT_TASK}-recovery.json"
-
     elif [ "$RESULT" = "pass" ]; then
         log_recovery "$CURRENT_TASK" "gate_pass" "$STEP_LABEL" "pass" "$ITER_TOKENS"
         rm -f ".ralph/${CURRENT_TASK}-recovery.json"
         rm -f ".ralph/prompt-step-${CURRENT_TASK}.md"
         rm -f ".ralph/prompt-context-${CURRENT_TASK}.md"
-        # If agent closed the task (moved it out of 2_active), clean up iter scratch files
-        if [ ! -f "$TASK_FILE" ]; then
+
+        LOCAL_TASK_CLOSED=false
+        # If task file still exists and has no unchecked steps, bash closes it
+        if [ -f "$TASK_FILE" ] && ! grep -q '^\- \[ \]' "$TASK_FILE"; then
+            echo "Info: ${CURRENT_TASK} completed all steps — closing task."
+            DONE_FILE="tasks/3_done/$(date +%Y-%m-%d)-${CURRENT_TASK}.md"
+            mv "$TASK_FILE" "$DONE_FILE"
+            echo "$(date '+%Y-%m-%d') | ${CURRENT_TASK} | Completed all steps | [task](${DONE_FILE})" >> CHANGELOG.md
+            git add "tasks/3_done/${DONE_FILE##*/}" CHANGELOG.md
+            git commit -m "${CURRENT_TASK}: close task"
+            LOCAL_TASK_CLOSED=true
+        fi
+
+        # Clean up iter scratch files if the task was closed (either by bash above, or if it was already missing)
+        if [ "$LOCAL_TASK_CLOSED" = true ] || [ ! -f "$TASK_FILE" ]; then
             rm -f .ralph/iter-*.json .ralph/iter-*-stderr.log .ralph/iter-*-task.txt
+            rm -f .ralph/last-test-error.txt
+        fi
             rm -f .ralph/last-test-error.txt
         fi
 
