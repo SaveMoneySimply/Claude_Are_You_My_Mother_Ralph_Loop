@@ -57,6 +57,21 @@ Plans and tasks are currently unconnected — `close_task()` infers a phase from
 
 ---
 
+## Task-writing practices learned from AYMM failures (2026-05-30)
+
+These aren't engine changes — they're habits that reduce free provider failure rates. All added to CLAUDE.md.
+
+**`bash -n` in every step test that edits a bash file**
+Free providers frequently introduce unbalanced `if/fi` or `{/}`. A step test like `grep -q 'key-string' file.sh` passes even when the file is syntactically broken. Prefixing with `bash -n file.sh &&` catches the error immediately and puts the exact failing line number into `last-test-error.txt` for the next prompt. Without this, the global test-engine run catches it but the error message is less targeted and comes a round later. Observed: all 9 free provider attempts on v4-close-task-gap failed with syntax errors; none fixed it because the step test passed and providers thought they succeeded.
+
+**Show the full function in `-- files:`, not just the target lines**
+When a provider only sees the lines it's editing and not the surrounding function boundary, it guesses the brace/fi structure and gets it wrong. Set the range to include a few lines past the closing `}` or `fi` of the full function being modified. Cost: slightly larger payload. Benefit: providers can count brackets correctly.
+
+**Prefer describing exact old→new replacements over high-level descriptions for bash edits**
+"Replace these 5 lines with these 6 lines" is safer than "add a branch-existence check". Providers that see the exact old text can use `<edit>` blocks precisely. High-level descriptions lead to providers rewriting surrounding code they shouldn't touch.
+
+---
+
 ## Done
 
 **Timestamp done-task filenames** ✅ done in v3
