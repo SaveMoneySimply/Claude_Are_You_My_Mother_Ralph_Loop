@@ -271,6 +271,18 @@ close_task() {
 
     echo "Task ${task} closed."
 
+    # Clean up iter scratch files and last-test-error for this run
+    rm -f .ralph/iter-*.json .ralph/iter-*-stderr.log .ralph/iter-*-task.txt
+    rm -f .ralph/last-test-error.txt
+
+    # Prune closed task's entries from failure counters
+    if [[ -f .ralph/aymm-failure-counters.json ]]; then
+        local pruned
+        pruned="$(jq --arg t "${task}__" 'with_entries(select(.key | startswith($t) | not))' \
+            .ralph/aymm-failure-counters.json)"
+        echo "$pruned" > .ralph/aymm-failure-counters.json
+    fi
+
     # Phase completion check
     local phase="${task%%-*}"
     if [[ "$phase" =~ ^phase[0-9]+ ]]; then

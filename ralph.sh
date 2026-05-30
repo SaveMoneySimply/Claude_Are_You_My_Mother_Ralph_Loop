@@ -37,7 +37,12 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     docker build -t "$IMAGE" "$SCRIPT_DIR"
 fi
 
-mkdir -p .ralph
+mkdir -p .ralph .ralph/archive
+
+# Rotate loop.log if it has meaningful content (> 20 lines)
+if [ -f .ralph/loop.log ] && [ "$(wc -l < .ralph/loop.log)" -gt 20 ]; then
+    mv .ralph/loop.log ".ralph/archive/loop-$(date +%Y-%m-%d-%H%M).log"
+fi
 
 # Auth: use credentials file (subscription) or API key
 AUTH_MOUNT=""

@@ -268,6 +268,8 @@ while [ ! -f STOP ]; do
         DONE_FILE="tasks/3_done/$(date +%Y-%m-%d)-${CURRENT_TASK}.md"
         mv "$TASK_FILE" "$DONE_FILE"
         echo "$(date '+%Y-%m-%d') | ${CURRENT_TASK} | Auto-closed: all steps complete | [task](${DONE_FILE})" >> CHANGELOG.md
+        rm -f .ralph/iter-*.json .ralph/iter-*-stderr.log .ralph/iter-*-task.txt
+        rm -f .ralph/last-test-error.txt
         continue
     fi
 
@@ -358,6 +360,11 @@ while [ ! -f STOP ]; do
         rm -f ".ralph/${CURRENT_TASK}-recovery.json"
         rm -f ".ralph/prompt-step-${CURRENT_TASK}.md"
         rm -f ".ralph/prompt-context-${CURRENT_TASK}.md"
+        # If agent closed the task (moved it out of 2_active), clean up iter scratch files
+        if [ ! -f "$TASK_FILE" ]; then
+            rm -f .ralph/iter-*.json .ralph/iter-*-stderr.log .ralph/iter-*-task.txt
+            rm -f .ralph/last-test-error.txt
+        fi
 
     elif [ "$RESULT" = "fail" ]; then
         RECOVERY_ATTEMPTS=$((RECOVERY_ATTEMPTS + 1))
