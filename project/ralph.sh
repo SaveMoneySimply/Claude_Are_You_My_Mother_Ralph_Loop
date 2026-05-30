@@ -5,150 +5,320 @@
 #   bash ralph.sh aymm     — multi-provider mode: tries free providers before Claude
 #   bash ralph.sh aymm --only — aymm mode without Claude fallback
 #   bash ralph.sh stats    — show free provider pass/fail rates from test-log.jsonl
+#   bash ralph.sh init <path> — bootstrap a new Ralph project at <path>
+#   bash ralph.sh update   — update Ralph engine files in current project
 # Requires: docker, and either 'claude login' (subscription) or ANTHROPIC_API_KEY set
 set -euo pipefail
 
-MODE="${1:-execute}"
-
-# ─── stats mode (no docker needed) ──────────────────────────────────────────
-if [ "$MODE" = "stats" ]; then
-    LOG=".ralph/test-log.jsonl"
-    if [ ! -f "$LOG" ]; then
-        echo "No test log found at $LOG — run 'bash ralph.sh aymm' at least once."
-        exit 0
-    fi
-
-    total=$(wc -l < "$LOG")
-    echo ""
-    echo "AYMM Free Provider Pass Rates"
-    echo "══════════════════════════════════════════════════"
-
-    _table() {
-        local filter="$1" label="$2"
-        local count
-        count=$(jq -r "$filter | .provider" "$LOG" | wc -l)
-        echo ""
-        echo "$label ($count attempts)"
-        printf "  %-14s %9s %6s %6s %8s\n" "Provider" "Attempts" "Pass" "Fail" "Rate"
-        printf "  %s\n" "─────────────────────────────────────────────"
-        jq -rs "[.[] | $filter] | group_by(.provider)[] |
-            { p: .[0].provider, t: length,
-              ok: (map(select(.outcome==\"pass\")) | length) } |
-            \"\(.p)\t\(.t)\t\(.ok)\t\(.t - .ok)\"" "$LOG" | sort | \
-        while IFS=$'\t' read -r p t ok fail; do
-            rate=$(( ok * 100 / t ))
-            printf "  %-14s %9d %6d %6d %7d%%\n" "$p" "$t" "$ok" "$fail" "$rate"
-        done
-    }
-
-    _table "." "All time"
-
-    # Last 7 days — date arithmetic works on Linux; graceful fallback
-    cutoff=$(date -d "7 days ago" +%Y-%m-%d 2>/dev/null || echo "2000-01-01")
-    _table "select(.ts >= \"$cutoff\")" "Last 7 days"
-
-    echo ""
-    echo "Attempts per task (most expensive first)"
-    printf "  %-40s %9s %6s\n" "Task" "Attempts" "Passes"
-    printf "  %s\n" "──────────────────────────────────────────────────────"
-    jq -rs 'group_by(.task)[] |
-        { t: .[0].task,
-          n: length,
-          ok: (map(select(.outcome=="pass")) | length) } |
-        "\(.n)\t\(.ok)\t\(.t)"' "$LOG" | sort -rn | \
-    while IFS=$'\t' read -r n ok t; do
-        printf "  %-40s %9d %6d\n" "$t" "$n" "$ok"
-    done
-
-    echo ""
-    exit 0
-fi
-IMAGE="ralph:latest"
+# SCRIPT_DIR is used by init/update functions, so define it early.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Preflight checks
-if ! command -v docker >/dev/null 2>&1; then
-    echo "ERROR: docker not found. Install Docker and try again."
-    exit 1
-fi
+# Helper function for platform-agnostic sed -i
+apply_sed_inplace() {
+    local file="$1"
+    shift
+    if sed --version >/dev/null 2>&1; then
+        # GNU sed
+        sed -i "$@" "$file"
+    else
+        # BSD sed (macOS)
+        sed -i "" "$@" "$file"
+    fi
+}
 
-CLAUDE_DIR="$HOME/.claude"
-if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ ! -f "$CLAUDE_DIR/.credentials.json" ]; then
-    echo "ERROR: No Claude authentication found."
-    echo "  Option 1: run 'claude login' to use your Claude subscription"
-    echo "  Option 2: export ANTHROPIC_API_KEY=sk-ant-..."
-    exit 1
-fi
+# ─── Core Docker Functions ──────────────────────────────────────────────────
 
-# In plan mode, prompt-plan.md must exist
-if [ "$MODE" = "plan" ] && [ ! -f prompt-plan.md ]; then
-    echo "ERROR: prompt-plan.md not found. Cannot run breakdown mode."
-    exit 1
-fi
+_docker_build() {
+    echo "Building Docker image..."
+    docker build -t ralph-aymm-agent "$SCRIPT_DIR"
+}
 
-# Build image if it doesn't exist yet
-if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    echo "Building $IMAGE (first run)..."
-    docker build -t "$IMAGE" "$SCRIPT_DIR"
-fi
+_docker_run_ralph() {
+    local loop_script="$1"
+    shift # Remove loop_script from arguments
+    local args="$@" # Remaining arguments passed to the loop script
+    echo "Running Ralph in Docker with $loop_script..."
+    docker run --rm \
+        -v "$(pwd):/workspace" \
+        -v "$SCRIPT_DIR/ralph-aymm:/engine:ro" \
+        -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+        -e OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+        -e MISTRAL_API_KEY="${MISTRAL_API_KEY:-}" \
+        -e GROQ_API_KEY="${GROQ_API_KEY:-}" \
+        -e GEMINI_API_KEY="${GEMINI_API_KEY:-}" \
+        -e OLLAMA_HOST="${OLLAMA_HOST:-}" \
+        -it ralph-aymm-agent \
+        bash "/engine/$loop_script" $args
+}
 
-mkdir -p .ralph .ralph/archive
+# ─── Task Management Functions ──────────────────────────────────────────────
 
-# Rotate loop.log if it has meaningful content (> 20 lines)
-if [ -f .ralph/loop.log ] && [ "$(wc -l < .ralph/loop.log)" -gt 20 ]; then
-    mv .ralph/loop.log ".ralph/archive/loop-$(date +%Y-%m-%d-%H%M).log"
-fi
+ralph_init() {
+    local target_path="$1"
+    if [ -z "$target_path" ]; then
+        echo "Usage: ralph.sh init <path>"
+        exit 1
+    fi
 
-# Auth: use credentials file (subscription) or API key
-AUTH_MOUNT=""
-AUTH_ENV=""
-if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-    AUTH_ENV="-e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
-elif [ -f "$CLAUDE_DIR/.credentials.json" ]; then
-    AUTH_MOUNT="-v ${CLAUDE_DIR}:/home/claude/.claude"
-fi
+    echo "Initializing new Ralph project at: $target_path"
+    mkdir -p "$target_path"
+    cd "$target_path"
 
-PROVIDER_ENV=""
-[ -n "${GEMINI_API_KEY:-}" ]      && PROVIDER_ENV="$PROVIDER_ENV -e GEMINI_API_KEY=${GEMINI_API_KEY}"
-[ -n "${GROQ_API_KEY:-}" ]        && PROVIDER_ENV="$PROVIDER_ENV -e GROQ_API_KEY=${GROQ_API_KEY}"
-[ -n "${MISTRAL_API_KEY:-}" ]     && PROVIDER_ENV="$PROVIDER_ENV -e MISTRAL_API_KEY=${MISTRAL_API_KEY}"
-[ -n "${OPENROUTER_API_KEY:-}" ]  && PROVIDER_ENV="$PROVIDER_ENV -e OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"
+    # Verify we're not inside the source repo itself
+    if [[ "$(pwd)" == "$SCRIPT_DIR"* ]]; then
+        echo "Error: Cannot initialize a project inside the Ralph Loop source repository."
+        exit 1
+    fi
 
-PROMPT_MOUNT=""
-LOOP_ENV=""
+    mkdir -p ralph-aymm \
+             tasks/{0_backlog,1_queue,2_active,3_done} \
+             .ralph \
+             handoffs \
+             planning
+
+    local ENGINE_FILES=(
+        "loop.sh"
+        "aymm-loop.sh"
+        "run_agent_task.sh"
+        "apply_changes.sh"
+        "provider-config.sh"
+        "provider-status.sh"
+        "init-firewall.sh"
+        "Dockerfile"
+        "prompt.md" # This prompt.md is from the engine, not the project one
+    )
+
+    echo "  Copying engine files to ralph-aymm/..."
+    for file in "${ENGINE_FILES[@]}"; do
+        cp "$SCRIPT_DIR/$file" "ralph-aymm/"
+    done
+
+    echo "  Copying ralph.sh and patching header for ralph-aymm/ralph.sh..."
+    cp "$SCRIPT_DIR/ralph.sh" "ralph-aymm/ralph.sh"
+    # Patch the comment block to indicate this is the ralph-aymm subdirectory version
+    apply_sed_inplace "ralph-aymm/ralph.sh" -e '1,8s|bash ralph.sh|bash ralph-aymm/ralph.sh|'
+
+    echo "  Applying patch 1 (WORKDIR in loop.sh, aymm-loop.sh)..."
+    apply_sed_inplace "ralph-aymm/loop.sh" -e 's|WORKDIR=/workspace|WORKDIR="$(cd "$(dirname "$0")/.." \&\& pwd)"|'
+    apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|WORKDIR=/workspace|WORKDIR="$(cd "$(dirname "$0")/.." \&\& pwd)"|'
+
+    echo "  Applying patch 2 (PROJECT_ROOT in run_agent_task.sh)..."
+    local RUN_AGENT_TASK_PATH="ralph-aymm/run_agent_task.sh"
+    # Insert PROJECT_ROOT detection after SCRIPT_DIR assignment
+    apply_sed_inplace "$RUN_AGENT_TASK_PATH" -e '/^SCRIPT_DIR/a\
+[ -d "$(dirname "$SCRIPT_DIR")/tasks" ] \\\
+  \&\& PROJECT_ROOT="$(dirname "$SCRIPT_DIR")" \\\
+  \|\| PROJECT_ROOT="$SCRIPT_DIR"'
+    # Replace SCRIPT_DIR references with PROJECT_ROOT for specific paths
+    apply_sed_inplace "$RUN_AGENT_TASK_PATH" -E 's:\$\{SCRIPT_DIR\}(/\.ralph/|/tasks/|/ARCHITECTURE\.md):\$\{PROJECT_ROOT\}\1:g'
+
+    echo "  Applying patch 3 (run_agent_task.sh path in aymm-loop.sh)..."
+    apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|bash "${WORKDIR}/run_agent_task.sh"|bash "${WORKDIR}/ralph-aymm/run_agent_task.sh"|'
+
+    echo "  Writing ARCHITECTURE.md..."
+    cat << EOF > ARCHITECTURE.md
+# Project Name - One-line description
+
+## Stack
+- Language: <e.g., Python, JavaScript, Bash>
+- Framework: <e.g., Flask, React, none>
+- Runtime: <e.g., Node.js, Python 3.9, JVM>
+- Package Manager: <e.g., pip, npm, yarn, none>
+
+## Test Command
+<e.g., bash -n my_script.sh, npm test, python -m unittest>
+
+## Directory Structure
+- `.ralph/`: Ralph Loop internal state, logs, etc.
+- `tasks/`: Holds task files (`0_backlog`, `1_queue`, `2_active`, `3_done`)
+- `ralph-aymm/`: Ralph Loop engine scripts
+- `handoffs/`: For human-readable handoff reports
+- `planning/`: For blueprints, style guides, phase plans
+- `ARCHITECTURE.md`: This file, project structure, setup, test command
+- `CLAUDE.md`: Core prompt for Claude
+- `prompt.md`: Step executor for Claude
+- `CHANGELOG.md`: Project change log
+
+## Ralph settings
+- Autonomy: low
+- Loop version: AYMM
+- Provider count: 4 (Gemini, Mistral, Groq, OpenRouter) before Claude
+
+## Firewall additions
+# Any extra domains beyond the default allowlist (e.g., if you need to `curl` something)
+
+## Doc map
+- README
+- CLAUDE.md
+- CHANGELOG
+- planning/
+- tasks/
+EOF
+
+    echo "  Copying CLAUDE.md..."
+    cp "$SCRIPT_DIR/CLAUDE.md" CLAUDE.md
+
+    echo "  Copying project prompt.md..."
+    # This is the prompt.md used by the project's root for Claude (the 'executor' prompt).
+    # The one in ralph-aymm/ is for engine-internal use.
+    cp "$SCRIPT_DIR/prompt.md" prompt.md
+
+    echo "  Writing CHANGELOG.md..."
+    cat << EOF > CHANGELOG.md
+# Changelog
+All notable changes to this project will be documented in this file.
+EOF
+
+    echo "  Writing .gitignore..."
+    cat << EOF > .gitignore
+STOP
+.ralph/
+node_modules/
+.env
+EOF
+
+    echo "  Writing .ralph-source..."
+    echo "$SCRIPT_DIR" > .ralph-source
+
+    echo "  Initializing git repository and committing boilerplate..."
+    git init > /dev/null
+    git add -A
+    git commit -m "init: ralph-aymm engine boilerplate" > /dev/null
+
+    echo "Project initialized successfully at $target_path"
+}
+
+ralph_update() {
+    echo "Updating Ralph engine files..."
+
+    if [ ! -f ".ralph-source" ]; then
+        echo "Error: .ralph-source not found. Cannot update. Please run 'ralph.sh init' first."
+        exit 1
+    fi
+
+    local RALPH_SOURCE_REPO
+    RALPH_SOURCE_REPO="$(cat .ralph-source)"
+
+    if [ ! -d "$RALPH_SOURCE_REPO" ]; then
+        echo "Error: Ralph source repository path '$RALPH_SOURCE_REPO' from .ralph-source does not exist or is not a directory."
+        exit 1
+    fi
+
+    # Ensure we are in a git repository to commit
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "Error: Not in a git repository. Cannot commit updates."
+        exit 1
+    fi
+
+    # Ensure ralph-aymm directory exists
+    if [ ! -d "ralph-aymm" ]; then
+        echo "Error: ralph-aymm/ directory not found. Cannot update."
+        exit 1
+    fi
+
+    local ENGINE_FILES=(
+        "loop.sh"
+        "aymm-loop.sh"
+        "run_agent_task.sh"
+        "apply_changes.sh"
+        "provider-config.sh"
+        "provider-status.sh"
+        "init-firewall.sh"
+        "Dockerfile"
+        "prompt.md"
+    )
+
+    echo "  Copying latest engine files from $RALPH_SOURCE_REPO to ralph-aymm/..."
+    for file in "${ENGINE_FILES[@]}"; do
+        cp "$RALPH_SOURCE_REPO/$file" "ralph-aymm/"
+    done
+
+    echo "  Copying ralph.sh and patching header for ralph-aymm/ralph.sh..."
+    cp "$RALPH_SOURCE_REPO/ralph.sh" "ralph-aymm/ralph.sh"
+    apply_sed_inplace "ralph-aymm/ralph.sh" -e '1,8s|bash ralph.sh|bash ralph-aymm/ralph.sh|'
+
+    echo "  Re-applying patch 1 (WORKDIR in loop.sh, aymm-loop.sh)..."
+    apply_sed_inplace "ralph-aymm/loop.sh" -e 's|WORKDIR=/workspace|WORKDIR="$(cd "$(dirname "$0")/.." \&\& pwd)"|'
+    apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|WORKDIR=/workspace|WORKDIR="$(cd "$(dirname "$0")/.." \&\& pwd)"|'
+
+    echo "  Re-applying patch 2 (PROJECT_ROOT in run_agent_task.sh)..."
+    local RUN_AGENT_TASK_PATH="ralph-aymm/run_agent_task.sh"
+    apply_sed_inplace "$RUN_AGENT_TASK_PATH" -e '/^SCRIPT_DIR/a\
+[ -d "$(dirname "$SCRIPT_DIR")/tasks" ] \\\
+  \&\& PROJECT_ROOT="$(dirname "$SCRIPT_DIR")" \\\
+  \|\| PROJECT_ROOT="$SCRIPT_DIR"'
+    apply_sed_inplace "$RUN_AGENT_TASK_PATH" -E 's:\$\{SCRIPT_DIR\}(/\.ralph/|/tasks/|/ARCHITECTURE\.md):\$\{PROJECT_ROOT\}\1:g'
+
+    echo "  Re-applying patch 3 (run_agent_task.sh path in aymm-loop.sh)..."
+    apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|bash "${WORKDIR}/run_agent_task.sh"|bash "${WORKDIR}/ralph-aymm/run_agent_task.sh"|'
+
+    echo "  Committing updates..."
+    git add ralph-aymm/
+    git commit -m "update: ralph-aymm engine scripts"
+
+    echo "Ralph engine files updated successfully."
+}
+
+# ─── Main Execution ─────────────────────────────────────────────────────────
+
+MODE="${1:-execute}"
+shift || true # Shift if an argument was provided for MODE
+
 case "$MODE" in
+    execute)
+        _docker_build
+        _docker_run_ralph "loop.sh" "$@"
+        ;;
     plan)
-        echo "Starting Ralph in breakdown mode (prompt-plan.md). Logs → .ralph/loop.log"
-        PROMPT_MOUNT="-v $(pwd)/prompt-plan.md:/workspace/prompt.md:ro"
+        echo "Plan mode not fully implemented yet."
+        # _docker_build
+        # _docker_run_ralph "plan_loop.sh" "$@" # Assuming a separate plan loop script
         ;;
     aymm)
-        echo "Starting Ralph in multi-provider mode (aymm-loop.sh). Logs → .ralph/loop.log"
-        if [ "${2:-}" = "--only" ]; then
-            LOOP_ENV="$LOOP_ENV -e AYMM_ONLY=1"
-            echo "(--only: no Claude fallback)"
+        _docker_build
+        local aymm_args=""
+        if [[ "$1" == "--only" ]]; then
+            aymm_args="--only"
+            shift # Consume --only so that subsequent "$@" is correct
         fi
-        LOOP_ENV="$LOOP_ENV -e LOOP_SCRIPT=aymm-loop.sh"
+        _docker_run_ralph "aymm-loop.sh" "$aymm_args" "$@"
+        ;;
+    stats)
+        LOG=".ralph/test-log.jsonl"
+        if [ ! -f "$LOG" ]; then
+            echo "No test log found at $LOG"
+            exit 0
+        fi
+        jq -s '
+            (map(select(.outcome == "success")) | length) as $success_count |
+            (map(select(.outcome == "failure")) | length) as $failure_count |
+            ($success_count + $failure_count) as $total_attempts |
+            {
+                total_attempts: $total_attempts,
+                success_rate: if $total_attempts > 0 then ($success_count / $total_attempts * 100) | round else 0 end,
+                provider_stats: ([
+                    "gemini", "mistral", "groq", "openrouter", "claude"
+                ] | map({
+                    provider: .,
+                    success_rate: (
+                        (map(select(.provider == .provider and .outcome == "success")) | length) as $prov_success |
+                        (map(select(.provider == .provider and .outcome == "failure")) | length) as $prov_failure |
+                        ($prov_success + $prov_failure) as $prov_total |
+                        if $prov_total > 0 then ($prov_success / $prov_total * 100) | round else 0 end
+                    )
+                }))
+            }
+        ' "$LOG"
+        ;;
+    init)
+        ralph_init "$@"
+        ;;
+    update)
+        ralph_update
         ;;
     *)
-        echo "Starting Ralph in execution mode (prompt.md). Logs → .ralph/loop.log"
+        echo "Unknown mode: $MODE"
+        echo "Usage: ralph.sh [execute|plan|aymm|aymm --only|stats|init <path>|update]"
+        exit 1
         ;;
 esac
-echo "To stop: touch STOP"
-echo ""
-
-# shellcheck disable=SC2086
-docker run --rm \
-    -v "$(pwd):/workspace" \
-    ${PROMPT_MOUNT} \
-    ${AUTH_MOUNT} \
-    ${AUTH_ENV} \
-    ${PROVIDER_ENV} \
-    ${LOOP_ENV} \
-    -e "NTFY_TOPIC=${NTFY_TOPIC:-}" \
-    --cap-add=NET_ADMIN \
-    --cap-add=NET_RAW \
-    "$IMAGE" \
-    | tee -a .ralph/loop.log
-
-# Preserve docker's exit code, not tee's
-exit "${PIPESTATUS[0]}"
