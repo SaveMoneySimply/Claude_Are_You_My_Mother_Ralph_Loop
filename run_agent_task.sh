@@ -140,23 +140,36 @@ bundle_context() {
     prompt="${prompt}## Current task step"$'\n\n'
     prompt="${prompt}${next_step}"$'\n\n'
 
+    # Immediate feedback from the last failed attempt — injected right after the step
+    # so the model sees what broke before reading anything else
+    local error_file="${SCRIPT_DIR}/.ralph/last-test-error.txt"
+    if [[ -f "$error_file" ]]; then
+        local error_content
+        error_content="$(head -100 "$error_file")"
+        prompt="${prompt}## Previous attempt failed"$'\n\n'
+        prompt="${prompt}The last attempt produced this test output:"$'\n'
+        prompt="${prompt}\`\`\`"$'\n'
+        prompt="${prompt}${error_content}"$'\n'
+        prompt="${prompt}\`\`\`"$'\n\n'
+        prompt="${prompt}Fix what failed. Do not remove passing tests or rewrite unrelated code."$'\n\n'
+    fi
+
     prompt="${prompt}<context name=\"task\">"$'\n'
     prompt="${prompt}${task_content}"$'\n'
     prompt="${prompt}</context>"$'\n\n'
 
-    # Full failure history for this task across all providers
+    # Failure history for this task — provider and error only (no code) to keep payload small
     local test_log="${SCRIPT_DIR}/.ralph/test-log.jsonl"
     if [[ -f "$test_log" ]]; then
         local failure_history
         failure_history="$(jq -r --arg t "$task_name" \
             'select(.task == $t and .outcome == "fail") |
-             "[\(.ts)] \(.provider)\nCode written:\n\(.response)\nTest error:\n\(.output)\n---"' \
+             "[\(.ts)] \(.provider) — \(.output)"' \
             "$test_log")"
         if [[ -n "$failure_history" ]]; then
             prompt="${prompt}<context name=\"previous-attempts\">"$'\n'
             prompt="${prompt}${failure_history}"$'\n'
             prompt="${prompt}</context>"$'\n\n'
-            prompt="${prompt}Study what was tried and why it failed before writing your solution."$'\n\n'
         fi
     fi
 
