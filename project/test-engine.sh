@@ -281,5 +281,117 @@ echo "=== STOP detection ==="
 )
 
 echo ""
+echo "=== run_mode ==="
+
+read_run_mode_fn() {
+    local task_file="$1"
+    local val
+    val=$(grep -oiP '\bRun:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
+        | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-any}"
+}
+
+# (a) bold format: **Run:** interactive
+tmp_task=$(mktemp /tmp/te-task-XXXXXX.md)
+printf '**Run:** interactive\n' > "$tmp_task"
+assert_eq "run_mode: bold **Run:** interactive" "interactive" "$(read_run_mode_fn "$tmp_task")"
+
+# (b) bold format: **Run:** ralph
+printf '**Run:** ralph\n' > "$tmp_task"
+assert_eq "run_mode: bold **Run:** ralph" "ralph" "$(read_run_mode_fn "$tmp_task")"
+
+# (c) bold format: **Run:** aymm
+printf '**Run:** aymm\n' > "$tmp_task"
+assert_eq "run_mode: bold **Run:** aymm" "aymm" "$(read_run_mode_fn "$tmp_task")"
+
+# (d) plain format: Run: any
+printf 'Run: any\n' > "$tmp_task"
+assert_eq "run_mode: plain Run: any" "any" "$(read_run_mode_fn "$tmp_task")"
+
+# (e) absent — defaults to "any"
+printf '## Steps\n- [ ] do something\n' > "$tmp_task"
+assert_eq "run_mode: absent defaults to any" "any" "$(read_run_mode_fn "$tmp_task")"
+
+rm -f "$tmp_task"
+
+echo ""
+echo "=== autonomy ==="
+
+read_autonomy_fn() {
+    local arch_file="$1"
+    local val
+    val=$(grep -i 'autonomy:' "$arch_file" 2>/dev/null \
+        | grep -oiP 'autonomy:\s*\K\w+' | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-low}"
+}
+
+tmp_arch=$(mktemp /tmp/te-arch-XXXXXX.md)
+
+# (a) autonomy: high
+printf '## Ralph settings\nautonomy: high\n' > "$tmp_arch"
+assert_eq "autonomy: high" "high" "$(read_autonomy_fn "$tmp_arch")"
+
+# (b) autonomy: low
+printf '## Ralph settings\nautonomy: low\n' > "$tmp_arch"
+assert_eq "autonomy: low" "low" "$(read_autonomy_fn "$tmp_arch")"
+
+# (c) absent — defaults to "low"
+printf '## Ralph settings\n' > "$tmp_arch"
+assert_eq "autonomy: absent defaults to low" "low" "$(read_autonomy_fn "$tmp_arch")"
+
+rm -f "$tmp_arch"
+
+echo ""
+echo "=== header_parsing ==="
+
+read_model_fn() {
+    local task_file="$1"
+    local val
+    val=$(grep -oiP '\bModel:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
+        | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-sonnet}"
+}
+
+read_effort_fn() {
+    local task_file="$1"
+    local val
+    val=$(grep -oiP '\bEffort:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
+        | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-high}"
+}
+
+read_tokens_fn() {
+    local task_file="$1"
+    local val
+    val=$(grep 'Tokens estimated' "$task_file" 2>/dev/null | grep -oP '\d+' | head -1)
+    echo "${val:-0}"
+}
+
+tmp_task=$(mktemp /tmp/te-task-XXXXXX.md)
+
+# (a) bold format: **Model:** sonnet · **Effort:** high
+printf '**Model:** sonnet · **Effort:** high · **Tokens estimated:** 5000\n' > "$tmp_task"
+assert_eq "header_parsing: bold model" "sonnet" "$(read_model_fn "$tmp_task")"
+assert_eq "header_parsing: bold effort" "high" "$(read_effort_fn "$tmp_task")"
+
+# (b) plain format: Model: opus
+printf 'Model: opus\n' > "$tmp_task"
+assert_eq "header_parsing: plain model" "opus" "$(read_model_fn "$tmp_task")"
+
+# (c) missing model — defaults to "sonnet"
+printf '## Steps\n' > "$tmp_task"
+assert_eq "header_parsing: missing model defaults to sonnet" "sonnet" "$(read_model_fn "$tmp_task")"
+
+# (d) **Tokens estimated:** present
+printf '**Tokens estimated:** 5000\n' > "$tmp_task"
+assert_eq "header_parsing: tokens present" "5000" "$(read_tokens_fn "$tmp_task")"
+
+# (e) tokens absent — defaults to 0
+printf '## Steps\n' > "$tmp_task"
+assert_eq "header_parsing: missing tokens defaults to 0" "0" "$(read_tokens_fn "$tmp_task")"
+
+rm -f "$tmp_task"
+
+echo ""
 echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
 [ "$FAIL_COUNT" -eq 0 ]
