@@ -1,52 +1,46 @@
-# HANDOFF — Ralph Loop — 2026-05-29
+# HANDOFF — Ralph Loop — 2026-05-30
 
 > **Delete this file after reading.** It exists only to bridge sessions.
 
 ## Where we are
-Test Engine phase is in progress. te-01 is done, te-02 is mid-flight (step 1 complete, steps 2-4 re-opened after a runaway loop that marked them done without actually writing the code). Two loop bugs were fixed this session and are committed. Ready to re-run ralph.
+Test engine is complete: 40/40 tests pass, all engine scripts have syntax-clean root and project/ copies in sync. The loop is in a known-good, well-tested state ready for cleanup and new features.
 
 ## What was just done
-- **Self-hosting setup** — copied all engine scripts into `project/`, rewrote `project/ARCHITECTURE.md` to describe Ralph as the project under test, removed hello-world test artifacts
-- **Test Engine phase** — queued 5 te-* task files; te-01 (skeleton + 9 syntax checks) completed successfully
-- **`-- files:` annotation** — replaced auto-grep file injection in `run_agent_task.sh` with explicit `-- files: path:start-end` per-step annotation; all te-02 through te-05 task files updated with correct file/line-range annotations; CLAUDE.md updated with new format
-- **close_task() gap fix** — `aymm-loop.sh` now checks after Claude escalation whether the task was closed (file gone OR all steps done) and does branch merge/delete + continue instead of falling through with empty CURRENT_PROVIDER
-- **Runaway loop fix** — `loop.sh` now auto-closes (mv to done + CHANGELOG) when a task has no unchecked steps, instead of infinite `continue`
-- **te-02 reset** — steps 2-4 re-opened after groq completed step 1 but the loop marked remaining steps done without writing code (1027-iteration runaway before STOP)
+- Fixed two bugs in `run_agent_task.sh` and `project/run_agent_task.sh`:
+  1. `-- files:` annotation leaked into `step_test` command (causing grep to treat file paths as arguments)
+  2. Task file not restored on rollback (provider could mark all steps done; git rollback skipped `tasks/`)
+- Completed te-03 (escalation ladder), te-04 (run_mode/autonomy/header parsing), te-05 (failure counters + close_task_changelog) interactively
+- Fixed subshell test count propagation in `test-engine.sh` (shared temp file `_COUNTS`)
+- Added "never source loop scripts in tests" warning to `CLAUDE.md`
+- Merged v4 ideas into `tasks/0_backlog/ralph-v4-ideas.md`; deleted `reference/ralph-v4-ideas.md`
+- Queued `fix-echo-fallback-defaults` task in `tasks/0_backlog/`
+- Deleted stale `task/aymm-test` local branch (remote still exists — needs credential fix)
 
 ## Current blocker / next step
-No blockers. Current state is clean and ready to run:
-- Branch: `task/te-02-task-pipeline`
-- `tasks/2_active/te-02-task-pipeline.md` has steps 2-4 open
-- `tasks/1_queue/` has te-03, te-04, te-05 waiting
-
-Run `bash ralph.sh` to continue. The loop will resume te-02 at step 2 (pick_task tests).
-
-After the Test Engine phase completes (all 5 te-* tasks done), run the hello-world fixture from repo root to validate the live engine end-to-end.
+**Tomorrow's plan (in order):**
+1. Move `tasks/0_backlog/fix-echo-fallback-defaults.md` → `tasks/1_queue/` and work through it interactively — 3 small steps fixing `|| echo` dead fallbacks in `loop.sh`, `aymm-loop.sh`, and `project/` copies (7 spots total)
+2. Implement v4 Idea 1: inject `last-test-error.txt` into retry prompt in `run_agent_task.sh` and `project/run_agent_task.sh` — see sketch in `tasks/0_backlog/ralph-v4-ideas.md` under "Idea 1 — Error feedback in retry prompt"
 
 ## Key files changed this session
-- `run_agent_task.sh` + `project/run_agent_task.sh` — replaced auto-grep with `-- files:` parser
-- `loop.sh` + `project/loop.sh` — auto-close on no-unchecked-steps; fixed infinite loop
-- `aymm-loop.sh` + `project/aymm-loop.sh` — close_task() gap fix extended; TASKS_ATTEMPTED crash fixed
-- `CLAUDE.md` — step format updated with `-- files:` annotation and writing guidance
-- `tasks/1_queue/te-02` through `te-05` — all steps annotated with `-- files: path:start-end`
-- `tasks/2_active/te-02-task-pipeline.md` — steps 2-4 re-opened (step 1 done by groq)
-- `project/test-engine.sh` — te-01 complete; has harness + helpers + 9 syntax checks; te-02 step 1 adds setup_workspace
+- `run_agent_task.sh` + `project/run_agent_task.sh` — two bug fixes (-- files: leak, task file rollback)
+- `project/test-engine.sh` — 40 tests across 8 sections; shared temp file for count propagation
+- `CLAUDE.md` — added source-warning bullet to AYMM task-writing guidance
+- `tasks/0_backlog/ralph-v4-ideas.md` — merged in 4 free-provider improvement ideas with sketches
+- `tasks/0_backlog/fix-echo-fallback-defaults.md` — new task file, 3 steps, ready to move to queue
+- `reference/ralph-v4-ideas.md` — deleted (content merged into backlog)
 
 ## Open issues to keep in mind
-- **STOP file exists** at repo root — loop.sh removes it on startup automatically, not a problem
-- **`task/aymm-test` branch** — stale branch from earlier work, not related to current session; ignore or delete manually
-- **te-02 step 1 work**: `setup_workspace` helper was added to test-engine.sh by groq and committed — it's there and working. Steps 2-4 (pick_task tests, step-management tests, STOP detection) need to be written fresh
-- **Groq 413 (payload too large)** — was the original trigger for the `-- files:` fix. Should be resolved now that payloads are scoped. If it recurs, check that step annotations are using line ranges not full files
-- **hello-world fixture test** — do this AFTER all 5 te-* tasks complete: re-queue the hello-world task at repo root and run `bash ralph.sh` to validate the full live loop with the new fixes
+- Remote `task/aymm-test` branch still exists on origin — delete once GitHub credentials sorted in VS Code: `git push origin --delete task/aymm-test`
+- The `|| echo default` bug affects 7 spots but the loop works in practice — correctness cleanup, not emergency
+- v4 Idea 1 may trigger Groq 413 (payload too large) — the sketch notes to truncate `last-test-error.txt` if needed; watch on first AYMM run after the change
 
 ## Commands to run to resume
 ```bash
 # Verify clean state
-git status && git branch --show-current
+cd /home/matt/Documents/Matt/Code/Claude_Are_You_My_Mother_Ralph_Loop
+git status
+cd project && bash test-engine.sh && cd ..
 
-# Confirm te-02 step 1 is done and steps 2-4 are open
-grep '^\- \[' tasks/2_active/te-02-task-pipeline.md
-
-# Resume the loop
-bash ralph.sh
+# Start fix-echo-fallback-defaults
+mv tasks/0_backlog/fix-echo-fallback-defaults.md tasks/1_queue/fix-echo-fallback-defaults.md
 ```
