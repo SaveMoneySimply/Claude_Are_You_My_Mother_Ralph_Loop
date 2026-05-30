@@ -164,14 +164,14 @@ pick_task() {
 # Build focused step prompt: prompt.md base + task context + extracted next step
 build_step_prompt() {
     local task="$1" task_file="$2" next_step="$3"
+    local out=".ralph/prompt-step-${task}.md"
+    {
         cat prompt.md
         if [ -f ".ralph/escalation-context.md" ]; then
             echo ""
             echo "## Free provider attempts (failed)"
             cat ".ralph/escalation-context.md"
         fi
-        echo ""
-        cat prompt.md
         echo ""
         echo "---"
         echo "## Current task: ${task}"
@@ -184,19 +184,19 @@ build_step_prompt() {
         cat "${task_file}"
     } > "$out"
     echo "$out"
-        cat prompt.md
-        if [ -f ".ralph/escalation-context.md" ]; then
-            echo ""
-            echo "## Free provider attempts (failed)"
-            cat ".ralph/escalation-context.md"
-        fi
-        echo ""
+}
+
 # Build an extended prompt with surrounding task context, returns file path
 build_context_prompt() {
     local task="$1" task_file="$2" next_step="$3"
     local out=".ralph/prompt-context-${task}.md"
     {
         cat prompt.md
+        if [ -f ".ralph/escalation-context.md" ]; then
+            echo ""
+            echo "## Free provider attempts (failed)"
+            cat ".ralph/escalation-context.md"
+        fi
         echo ""
         echo "---"
         echo "## Current task: ${task}"
@@ -273,7 +273,6 @@ while [ ! -f STOP ]; do
     fi
 
     NEXT_STEP=$(grep -m1 '^- \[ \]' "$TASK_FILE" 2>/dev/null || echo "")
-    if [ -z "$NEXT_STEP" ]; then
     if [ -z "$NEXT_STEP" ]; then
         echo "Warning: ${CURRENT_TASK} has no unchecked steps — auto-closing"
         DONE_FILE="tasks/3_done/$(date +%Y-%m-%d)-${CURRENT_TASK}.md"
@@ -386,8 +385,6 @@ while [ ! -f STOP ]; do
         # Clean up iter scratch files if the task was closed (either by bash above, or if it was already missing)
         if [ "$LOCAL_TASK_CLOSED" = true ] || [ ! -f "$TASK_FILE" ]; then
             rm -f .ralph/iter-*.json .ralph/iter-*-stderr.log .ralph/iter-*-task.txt
-            rm -f .ralph/last-test-error.txt
-        fi
             rm -f .ralph/last-test-error.txt
         fi
 

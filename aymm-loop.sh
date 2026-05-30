@@ -393,7 +393,7 @@ while [[ ! -f STOP ]]; do
         ESCALATION_CONTEXT_FILE=".ralph/escalation-context.md"
         # Generate escalation context for Claude based on failed attempts for the current task
         if [[ -f ".ralph/test-log.jsonl" ]]; then
-            jq -r --arg task "$CURRENT_TASK" 'select(.task == $task and .test_error != null) | "[\(.timestamp)] \(.provider) — \(.test_error)"' .ralph/test-log.jsonl > "${ESCALATION_CONTEXT_FILE}"
+            jq -r --arg task "$CURRENT_TASK" 'select(.task == $task and .outcome == "fail") | "[\(.ts)] \(.provider) — \(.output)"' .ralph/test-log.jsonl > "${ESCALATION_CONTEXT_FILE}"
             if [[ -s "${ESCALATION_CONTEXT_FILE}" ]]; then # Check if the file is not empty
                 echo "Generated escalation context for Claude in ${ESCALATION_CONTEXT_FILE}"
             else
