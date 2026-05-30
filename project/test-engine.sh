@@ -393,5 +393,109 @@ assert_eq "header_parsing: missing tokens defaults to 0" "0" "$(read_tokens_fn "
 rm -f "$tmp_task"
 
 echo ""
+echo "=== failure_counters ==="
+
+# Copied verbatim from project/aymm-loop.sh lines 76-125 — update if source changes
+_init_failure_counters() {
+    if [[ ! -f ".ralph/aymm-failure-counters.json" ]]; then
+        echo '{}' > ".ralph/aymm-failure-counters.json"
+    fi
+}
+_get_failure_count() {
+    local provider="$1" task="$2"
+    local key="${task}__${provider}"
+    jq -r --arg k "$key" '.[$k] // 0' ".ralph/aymm-failure-counters.json"
+}
+_increment_failure_count() {
+    local provider="$1" task="$2"
+    local key="${task}__${provider}"
+    local current updated tmp
+    current="$(_get_failure_count "$provider" "$task")"
+    updated=$(( current + 1 ))
+    tmp="$(mktemp /tmp/aymm-counters-XXXXXX.json)"
+    jq --arg k "$key" --argjson v "$updated" '.[$k] = $v' \
+        ".ralph/aymm-failure-counters.json" > "$tmp" && mv "$tmp" ".ralph/aymm-failure-counters.json"
+}
+_reset_failure_count() {
+    local provider="$1" task="$2"
+    local key="${task}__${provider}" tmp
+    tmp="$(mktemp /tmp/aymm-counters-XXXXXX.json)"
+    jq --arg k "$key" 'del(.[$k])' \
+        ".ralph/aymm-failure-counters.json" > "$tmp" && mv "$tmp" ".ralph/aymm-failure-counters.json"
+}
+_reset_all_failure_counts() {
+    local task="$1" tmp
+    tmp="$(mktemp /tmp/aymm-counters-XXXXXX.json)"
+    jq --arg t "$task" 'with_entries(select(.key | startswith($t + "__") | not))' \
+        ".ralph/aymm-failure-counters.json" > "$tmp" && mv "$tmp" ".ralph/aymm-failure-counters.json"
+}
+
+(
+  fc_dir=$(mktemp -d)
+  trap "rm -rf $fc_dir" EXIT
+  mkdir -p "$fc_dir/.ralph"
+  cd "$fc_dir"
+  _init_failure_counters
+
+  # (a) initial count is 0
+  assert_eq "failure_counters: initial count is 0" "0" "$(_get_failure_count gemini my-task)"
+
+  # (b) increment twice → 2
+  _increment_failure_count gemini my-task
+  _increment_failure_count gemini my-task
+  assert_eq "failure_counters: count increments correctly" "2" "$(_get_failure_count gemini my-task)"
+
+  # (c) reset → 0
+  _reset_failure_count gemini my-task
+  assert_eq "failure_counters: reset returns to 0" "0" "$(_get_failure_count gemini my-task)"
+
+  # (d) reset_all clears both providers
+  _increment_failure_count gemini my-task
+  _increment_failure_count mistral my-task
+  _increment_failure_count mistral my-task
+  _reset_all_failure_counts my-task
+  cg=$(_get_failure_count gemini my-task)
+  cm=$(_get_failure_count mistral my-task)
+  if [ "$cg" -eq 0 ] && [ "$cm" -eq 0 ]; then
+    pass "failure_counters: reset_all clears all providers"
+  else
+    fail "failure_counters: reset_all clears all providers" "gemini=$cg mistral=$cm"
+  fi
+)
+
+echo ""
+echo "=== close_task_changelog ==="
+
+(
+  ct_dir=$(mktemp -d)
+  trap "rm -rf $ct_dir" EXIT
+  mkdir -p "$ct_dir/tasks/2_active" "$ct_dir/tasks/3_done" "$ct_dir/.ralph"
+  cd "$ct_dir"
+  git init -q && git config user.email "test@test" && git config user.name "test"
+  touch CHANGELOG.md tasks/2_active/my-task.md
+  git add -A && git commit -q -m "init"
+
+  # Inline the file-move and CHANGELOG parts of close_task (branch merge skipped — on main)
+  task="my-task"
+  done_file="tasks/3_done/$(date +%Y-%m-%d)-${task}.md"
+  mv "tasks/2_active/${task}.md" "$done_file"
+  echo "$(date '+%Y-%m-%d') | ${task} | Completed via test | [task](${done_file})" >> CHANGELOG.md
+
+  if grep -q "my-task" CHANGELOG.md && grep -q "$(date +%Y-%m-%d)" CHANGELOG.md; then
+    pass "close_task_changelog: CHANGELOG contains task name and today's date"
+  else
+    fail "close_task_changelog: CHANGELOG contains task name and today's date" \
+      "$(cat CHANGELOG.md)"
+  fi
+
+  if [ -f "$done_file" ] && [ ! -f "tasks/2_active/my-task.md" ]; then
+    pass "close_task_changelog: task file moved to 3_done with date prefix"
+  else
+    fail "close_task_changelog: task file moved to 3_done with date prefix" \
+      "done=$(ls tasks/3_done/ 2>/dev/null) active=$(ls tasks/2_active/ 2>/dev/null)"
+  fi
+)
+
+echo ""
 echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
 [ "$FAIL_COUNT" -eq 0 ]

@@ -27,3 +27,4 @@
 2026-05-29 | p2s4-project-dir-and-e2e-test | Validate fork model: project/ holds code, tasks stay at repo root, loop runs end-to-end | [task](tasks/3_done/2026-05-29-p2s4-project-dir-and-e2e-test.md)
 2026-05-29 | p2s3-update-readme | Full README rewrite: scripts reference, correct task pipeline, fork model, AYMM escalation, callouts | [task](tasks/3_done/2026-05-29-p2s3-update-readme.md)
 2026-05-30 | te-02-task-pipeline | Completed via claude-escalation | [task](tasks/3_done/2026-05-30-te-02-task-pipeline.md)
+2026-05-29 | te-05-close-and-counters | Add failure_counters and close_task_changelog tests to test-engine.sh | [task](tasks/3_done/2026-05-30-te-05-close-and-counters.md)
