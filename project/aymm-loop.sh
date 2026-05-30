@@ -389,7 +389,22 @@ while [[ ! -f STOP ]]; do
             break
         fi
         echo "Escalating to Claude for task ${CURRENT_TASK} — will return to AYMM after"
+
+        ESCALATION_CONTEXT_FILE=".ralph/escalation-context.md"
+        # Generate escalation context for Claude based on failed attempts for the current task
+        if [[ -f ".ralph/test-log.jsonl" ]]; then
+            jq -r --arg task "$CURRENT_TASK" 'select(.task == $task and .test_error != null) | "[\(.timestamp)] \(.provider) — \(.test_error)"' .ralph/test-log.jsonl > "${ESCALATION_CONTEXT_FILE}"
+            if [[ -s "${ESCALATION_CONTEXT_FILE}" ]]; then # Check if the file is not empty
+                echo "Generated escalation context for Claude in ${ESCALATION_CONTEXT_FILE}"
+            else
+                rm -f "${ESCALATION_CONTEXT_FILE}" # Delete if empty
+            fi
+        fi
+
         SINGLE_TASK=1 bash "${WORKDIR}/loop.sh"
+
+        # Clean up escalation context file after Claude returns
+        rm -f "${ESCALATION_CONTEXT_FILE}"
         # loop.sh returned cleanly — reset provider state for next task
         PROVIDER_INDEX=0
         RATE_LIMIT_ADVANCES=0
