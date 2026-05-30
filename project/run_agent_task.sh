@@ -83,6 +83,11 @@ bundle_context() {
         return 1
     fi
 
+    # Strip infrastructure annotations before showing to agent — agent implements from
+    # the spec, not by gaming the test command. Bash still reads full last-step.txt.
+    local agent_step
+    agent_step="$(echo "$next_step" | sed 's/[[:space:]]*-- test:.*$//' | sed 's/[[:space:]]*-- files:.*$//')"
+
     local task_content
     task_content="$(cat "$task_file")"
 
@@ -138,7 +143,7 @@ bundle_context() {
     fi
 
     prompt="${prompt}## Current task step"$'\n\n'
-    prompt="${prompt}${next_step}"$'\n\n'
+    prompt="${prompt}${agent_step}"$'\n\n'
 
     # Immediate feedback from the last failed attempt — injected right after the step
     # so the model sees what broke before reading anything else
