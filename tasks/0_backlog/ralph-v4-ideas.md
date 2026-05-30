@@ -4,6 +4,22 @@ Items deferred from v3. Not scheduled — collect here until there's enough to w
 
 ---
 
+## Do next (in this order)
+
+**1. Move task archival from agent to bash** — Medium-high difficulty, high reliability payoff
+Currently the agent moves `tasks/2_active/<name>.md` to `tasks/3_done/YYYY-MM-DD-<name>.md` and appends to `CHANGELOG.md` as part of executing the final step — instructed by `prompt.md`. This is mechanical state management that belongs in the loop, not a judgment call that needs the agent. Moving it to bash (`loop.sh` / `aymm-loop.sh`) on a pass result would: make the agent's job simpler (fewer things to get wrong on the final step), make archival more reliable (not dependent on the agent following instructions precisely), and keep `prompt.md` focused on just executing the step.
+Fix: after each pass result in `loop.sh`, check if all steps in the task file are `[x]` — if so, close the task from bash. Remove archival instructions from `prompt.md`. Note: if this is done first, the close_task() gap mostly fixes itself since bash handles archival uniformly for both normal and Claude-escalation paths.
+
+**2. close_task() gap when Claude handles final steps via loop.sh escalation** — Easy, ~10 lines, real observed bug
+When aymm-loop.sh escalates to Claude (`SINGLE_TASK=1 bash loop.sh`), loop.sh's own close logic runs — it moves the task file to `3_done/` via `prompt.md` instructions. But aymm-loop.sh's `close_task()` never fires, so the task branch is not merged to main, not deleted, and the `2_active/` file is left as a stale copy. Observed after p1s1: had to manually `git merge --ff-only`, `git branch -d`, and `rm tasks/2_active/...`.
+Fix: after `SINGLE_TASK=1 bash loop.sh` returns, check if task file is gone from `2_active/` — if so, run only the branch merge/delete portion of `close_task()`. If #1 is done first, this may already be resolved.
+
+**3. Pass AYMM failure history to Claude on escalation** — Medium difficulty, medium impact
+When all free providers exhaust and `loop.sh` is called as Claude fallback, inject the `previous-attempts` context from `.ralph/test-log.jsonl` into the prompt so Claude knows what was tried and broken. Currently `run_agent_task.sh` passes this context between free providers, but the handoff to `loop.sh` drops it. Claude succeeded without it in the p1s1 run, but for harder tasks it would help Claude avoid repeating the same broken approaches.
+Fix: write `.ralph/escalation-context.md` from `test-log.jsonl` before calling `SINGLE_TASK=1 bash loop.sh`; have `loop.sh` detect and inject it. ~30 lines across `aymm-loop.sh` + `loop.sh`.
+
+---
+
 ## Open
 
 **AYMM-all mode (`bash ralph.sh aymm --all`)**
@@ -18,18 +34,6 @@ Utility that queries `https://openrouter.ai/api/v1/models`, filters for `:free` 
 
 **Daily quota reset detection**
 When a provider hits its daily limit (403 / quota-exhausted body), read the reset timestamp from response headers (`x-ratelimit-reset`, `Retry-After`) and sleep exactly that duration rather than writing STOP. Only worth building once we have real response examples from each provider hitting their daily limit — inspect `.ralph/http-error-log.jsonl` after a real quota hit.
-
-**Pass AYMM failure history to Claude on escalation** — Medium difficulty, medium impact
-When all free providers exhaust and `loop.sh` is called as Claude fallback, inject the `previous-attempts` context from `.ralph/test-log.jsonl` into the prompt so Claude knows what was tried and broken. Currently `run_agent_task.sh` passes this context between free providers, but the handoff to `loop.sh` drops it. Claude succeeded without it in the p1s1 run, but for harder tasks it would help Claude avoid repeating the same broken approaches.
-Fix: write `.ralph/escalation-context.md` from `test-log.jsonl` before calling `SINGLE_TASK=1 bash loop.sh`; have `loop.sh` detect and inject it. ~30 lines across `aymm-loop.sh` + `loop.sh`.
-
-**close_task() gap when Claude handles final steps via loop.sh escalation** — Easy, ~10 lines, real observed bug ⭐
-When aymm-loop.sh escalates to Claude (`SINGLE_TASK=1 bash loop.sh`), loop.sh's own close logic runs — it moves the task file to `3_done/` via `prompt.md` instructions. But aymm-loop.sh's `close_task()` never fires, so the task branch is not merged to main, not deleted, and the `2_active/` file is left as a stale copy. Observed after p1s1: had to manually `git merge --ff-only`, `git branch -d`, and `rm tasks/2_active/...`.
-Fix: after `SINGLE_TASK=1 bash loop.sh` returns, check if task file is gone from `2_active/` — if so, run only the branch merge/delete portion of `close_task()`.
-
-**Move task archival from agent to bash** — Medium-high difficulty, high reliability payoff ⭐
-Currently the agent moves `tasks/2_active/<name>.md` to `tasks/3_done/YYYY-MM-DD-<name>.md` and appends to `CHANGELOG.md` as part of executing the final step — instructed by `prompt.md`. This is mechanical state management that belongs in the loop, not a judgment call that needs the agent. Moving it to bash (`loop.sh` / `aymm-loop.sh`) on a pass result would: make the agent's job simpler (fewer things to get wrong on the final step), make archival more reliable (not dependent on the agent following instructions precisely), and keep `prompt.md` focused on just executing the step.
-Fix: after each pass result in `loop.sh`, check if all steps in the task file are `[x]` — if so, close the task from bash. Remove archival instructions from `prompt.md`. Note: if this is done first, the close_task() gap mostly fixes itself since bash handles archival uniformly for both normal and Claude-escalation paths.
 
 **Single-attempt-then-switch on task failure (consider alongside rollback)**
 Currently retries the same provider up to 3× on task failure before switching. Once rollback is in place, a failed attempt is clean (no broken baseline), but retrying the same provider quickly can trigger 429s. Consider reducing to 1 attempt per provider for code-writing failures — log the result, pass it as context to the next provider, move on. Keep the retry count for rate-limit recovery (which is already handled separately).
