@@ -15,16 +15,17 @@ FORCE_SPLIT_STEP=50
 # ─── helpers ────────────────────────────────────────────────────────────────
 
 read_autonomy() {
-    grep -i 'autonomy:' ARCHITECTURE.md 2>/dev/null \
-        | grep -oiP 'autonomy:\s*\K\w+' | head -1 | tr '[:upper:]' '[:lower:]' \
-        || echo "low"
+    local val
+    val=$(grep -i 'autonomy:' ARCHITECTURE.md 2>/dev/null \
+        | grep -oiP 'autonomy:\s*\K\w+' | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-low}"
 }
 
 read_run_mode() {
-    local task_file="$1"
-    grep -oiP '\bRun:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
-        | head -1 | tr '[:upper:]' '[:lower:]' \
-        || echo "any"
+    local task_file="$1" val
+    val=$(grep -oiP '\bRun:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
+        | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-any}"
 }
 
 # Given (declared_model, declared_effort, step_number) prints "model:effort"
@@ -88,14 +89,19 @@ load_recovery() {
         RECOVERY_STEP=0
         RECOVERY_ATTEMPTS=0
         # Read split_depth from task file header (sub-tasks carry this from their creation)
-        RECOVERY_SPLIT_DEPTH=$(grep -oP 'Split depth:\s*\K\d+' \
-            "tasks/2_active/${task}.md" 2>/dev/null | head -1 || echo 0)
-        RECOVERY_PARENT=$(grep -oiP 'Parent task:\s*\K\S+' \
-            "tasks/2_active/${task}.md" 2>/dev/null | head -1 || echo "")
-        RECOVERY_DECL_MODEL=$(grep -oiP '\bModel:(?:\*\*\s*|\s+)\K\w+' \
-            "tasks/2_active/${task}.md" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]' || echo "sonnet")
-        RECOVERY_DECL_EFFORT=$(grep -oiP '\bEffort:(?:\*\*\s*|\s+)\K\w+' \
-            "tasks/2_active/${task}.md" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]' || echo "high")
+        local _sd _par _dm _de
+        _sd=$(grep -oP 'Split depth:\s*\K\d+' \
+            "tasks/2_active/${task}.md" 2>/dev/null | head -1)
+        RECOVERY_SPLIT_DEPTH="${_sd:-0}"
+        _par=$(grep -oiP 'Parent task:\s*\K\S+' \
+            "tasks/2_active/${task}.md" 2>/dev/null | head -1)
+        RECOVERY_PARENT="${_par:-}"
+        _dm=$(grep -oiP '\bModel:(?:\*\*\s*|\s+)\K\w+' \
+            "tasks/2_active/${task}.md" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]')
+        RECOVERY_DECL_MODEL="${_dm:-sonnet}"
+        _de=$(grep -oiP '\bEffort:(?:\*\*\s*|\s+)\K\w+' \
+            "tasks/2_active/${task}.md" 2>/dev/null | head -1 | tr '[:upper:]' '[:lower:]')
+        RECOVERY_DECL_EFFORT="${_de:-high}"
     fi
 }
 
@@ -333,7 +339,9 @@ while [ ! -f STOP ]; do
     # ─── read result written by agent ────────────────────────────────────
     # Agent writes "pass" or "fail" to .ralph/last-result.txt each iteration
 
-    RESULT=$(cat .ralph/last-result.txt 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo "unknown")
+    local _res
+    _res=$(cat .ralph/last-result.txt 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    RESULT="${_res:-unknown}"
     rm -f .ralph/last-result.txt  # consume it
 
     # ─── handle pass/fail ────────────────────────────────────────────────
@@ -371,7 +379,9 @@ while [ ! -f STOP ]; do
 
     ESTIMATE=0
     if [ -f "$TASK_FILE" ]; then
-        ESTIMATE=$(grep 'Tokens estimated' "$TASK_FILE" | grep -oP '\d+' | head -1 || echo 0)
+        local _est
+        _est=$(grep 'Tokens estimated' "$TASK_FILE" | grep -oP '\d+' | head -1)
+        ESTIMATE="${_est:-0}"
     fi
 
     TOTAL_TOKENS=0

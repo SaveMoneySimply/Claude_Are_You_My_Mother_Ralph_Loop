@@ -21,16 +21,17 @@ source "${WORKDIR}/provider-config.sh"
 # ---------------------------------------------------------------------------
 
 read_autonomy() {
-    grep -i 'autonomy:' ARCHITECTURE.md 2>/dev/null \
-        | grep -oiP 'autonomy:\s*\K\w+' | head -1 | tr '[:upper:]' '[:lower:]' \
-        || echo "low"
+    local val
+    val=$(grep -i 'autonomy:' ARCHITECTURE.md 2>/dev/null \
+        | grep -oiP 'autonomy:\s*\K\w+' | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-low}"
 }
 
 read_run_mode() {
-    local task_file="$1"
-    grep -oiP '\bRun:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
-        | head -1 | tr '[:upper:]' '[:lower:]' \
-        || echo "any"
+    local task_file="$1" val
+    val=$(grep -oiP '\bRun:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
+        | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-any}"
 }
 
 # Returns the current provider name given PROVIDER_INDEX and PROVIDERS array
