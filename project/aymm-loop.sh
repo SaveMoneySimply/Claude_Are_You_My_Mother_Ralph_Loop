@@ -256,11 +256,11 @@ close_task() {
     local task_file="tasks/2_active/${task}.md"
     local done_file="tasks/3_done/$(date +%Y-%m-%d)-${task}.md"
 
-    # Merge task branch if we're on it
-    local current_branch
-    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
-    if [[ "$current_branch" == "task/${task}" ]]; then
-        git checkout main
+    # Merge task branch if it exists
+    local branch_exists
+    branch_exists="$(git branch --list "task/${task}")"
+    if [[ -n "$branch_exists" ]]; then
+        git checkout main 2>/dev/null || true
         git merge --ff-only "task/${task}" && git branch -d "task/${task}" || true
     fi
 
