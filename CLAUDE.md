@@ -75,6 +75,7 @@ These habits produce better outcomes, especially with AYMM free providers:
 - Always set `**Allowed files:**` for AYMM tasks. Free providers regularly emit file blocks for files they shouldn't touch (test files, unrelated scripts, the task file itself). Scoping to specific files prevents silent corruption.
 - Keep token estimates honest — if the actual output exceeds 2× the estimate the loop stops. Under-estimating wastes a run; over-estimating is fine.
 - Prefer `<edit>` blocks over full `<file>` rewrites in your step descriptions. Full rewrites from free providers frequently truncate or drop functions.
+- **Never `source` a full loop script in a test.** `source loop.sh` or `source aymm-loop.sh` runs the main loop and blocks the container indefinitely. To test functions that live in those scripts, copy them verbatim into `test-engine.sh` (same approach as `get_step_spec` in te-03 and the failure counter functions in te-05). If a function is needed in many tests, consider extracting it to a sourced library file instead.
 
 **Done filenames**
 Completed tasks are moved to `tasks/3_done/YYYY-MM-DD-<name>.md` — the date prefix is added automatically so done files sort chronologically.

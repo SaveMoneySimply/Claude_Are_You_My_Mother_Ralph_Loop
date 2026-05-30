@@ -4,26 +4,31 @@
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$SCRIPT_DIR"
 
-# Initialize test counters
-PASS_COUNT=0
-FAIL_COUNT=0
+# Counts written to a temp file so subshell tests propagate back to parent
+_COUNTS=$(mktemp)
+echo "0 0" > "$_COUNTS"
 
 # Create a temporary directory for tests
 TESTDIR=$(mktemp -d)
 
-# Register a trap to clean up the temporary directory on exit
-trap "rm -rf $TESTDIR" EXIT
+# Clean up on exit — only set in parent; subshells inherit the file path, not this trap
+trap "rm -rf $TESTDIR $_COUNTS" EXIT
 
 # Helper functions
 pass() {
   echo "  PASS: $1"
-  ((PASS_COUNT++))
+  local p f; read -r p f < "$_COUNTS"
+  printf '%d %d\n' "$((p+1))" "$f" > "$_COUNTS"
 }
 
 fail() {
   echo "  FAIL: $1 — $2"
-  ((FAIL_COUNT++))
+  local p f; read -r p f < "$_COUNTS"
+  printf '%d %d\n' "$p" "$((f+1))" > "$_COUNTS"
 }
+
+PASS_COUNT=0
+FAIL_COUNT=0
 
 assert_eq() {
   if [ "$2" = "$3" ]; then
@@ -497,5 +502,6 @@ echo "=== close_task_changelog ==="
 )
 
 echo ""
+read -r PASS_COUNT FAIL_COUNT < "$_COUNTS"
 echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
 [ "$FAIL_COUNT" -eq 0 ]
