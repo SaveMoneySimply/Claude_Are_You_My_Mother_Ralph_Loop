@@ -67,6 +67,7 @@ These habits produce better outcomes, especially with AYMM free providers:
 
 **Steps**
 - One logical change per step. If a step touches more than two files or has more than one distinct thing to verify, split it.
+- **One independent assertion per step for AYMM tasks.** If assertion A could pass while assertion B fails, they belong in separate steps. Splitting costs one extra API call on the happy path but avoids burning multiple provider rotations when only one assertion fails — total usage is usually lower. Simple one-liner changes that have a single obvious failure mode don't need splitting.
 - The `-- test:` check should be the cheapest command that would catch an AI returning plausible-but-wrong output. A `grep -q 'key-string' file.sh` is better than re-running the full test suite for a single line change.
 - The `-- files:` annotation controls what file content gets injected as read context for this step. Format: `-- files: path1:start-end, path2, path3:50-90`. Use line ranges to inject only the relevant function rather than the whole script — this is the primary tool for keeping free-provider payloads small. If omitted, no files are auto-injected. Always list files explicitly; the old auto-grep approach is gone.
 - Avoid steps that require host-only commands inside the loop (`docker build`, writing outside `/workspace`, network calls to internal services). Mark those tasks `**Run:** interactive` or put the host command in the smoke test instead.
