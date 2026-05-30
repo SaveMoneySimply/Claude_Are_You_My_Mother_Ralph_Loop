@@ -461,6 +461,17 @@ main() {
         call_openai_compat "$prompt" "$tmp_response"
     fi
 
+    # Snapshot the task file before applying changes — the git rollback excludes
+    # tasks/ (to preserve the 1_queue→2_active move), so we restore it manually.
+    local task_file_backup=""
+    local task_snap_name
+    task_snap_name="$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null || true)"
+    local task_file="${SCRIPT_DIR}/tasks/2_active/${task_snap_name}.md"
+    if [[ -n "$task_snap_name" && -f "$task_file" ]]; then
+        task_file_backup="$(mktemp /tmp/aymm-task-backup-XXXXXX.md)"
+        cp "$task_file" "$task_file_backup"
+    fi
+
     # Parse and apply file changes
     parse_and_apply_response "$tmp_response"
 
@@ -476,6 +487,10 @@ main() {
     # Run test — roll back any provider changes on failure
     run_test_command || {
         echo "Test failed — rolling back provider changes" >&2
+        # Restore task file from snapshot (git excludes tasks/ from rollback)
+        if [[ -n "$task_file_backup" && -f "$task_file_backup" ]]; then
+            cp "$task_file_backup" "$task_file"
+        fi
         if [[ -n "$modified_files" ]]; then
             # shellcheck disable=SC2086
             git -C "$SCRIPT_DIR" checkout HEAD -- $modified_files 2>/dev/null || true
@@ -483,8 +498,10 @@ main() {
         if [[ -n "$new_files" ]]; then
             echo "$new_files" | xargs -I{} rm -f "${SCRIPT_DIR}/{}" 2>/dev/null || true
         fi
+        rm -f "$task_file_backup"
         exit 2
     }
+    rm -f "$task_file_backup"
 }
 
 main "$@"
