@@ -31,3 +31,4 @@
 2026-05-30 | fix-echo-fallback-defaults | Fix dead || echo fallbacks in loop.sh and aymm-loop.sh — 7 spots now use local-var + ${val:-default} pattern | [task](tasks/3_done/2026-05-30-fix-echo-fallback-defaults.md)
 2026-05-30 | v4-close-task-gap | Guard close_task() branch merge/delete with git branch --list existence check | [task](tasks/3_done/2026-05-30-v4-close-task-gap.md)
 2026-05-30 | v4-close-task-gap | Completed via claude-escalation | [task](tasks/3_done/2026-05-30-v4-close-task-gap.md)
+2026-05-30 | v4-pass-failure-history-to-claude | Completed via gemini | [task](tasks/3_done/2026-05-30-v4-pass-failure-history-to-claude.md)
