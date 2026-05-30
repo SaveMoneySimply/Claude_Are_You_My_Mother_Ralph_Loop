@@ -15,41 +15,60 @@ Everything below is secondary to that milestone.
 
 ## Confirmed next (in this order after external project)
 
-**1. STOP file responsiveness** — Easy, real UX pain point
-`touch STOP` didn't halt the loop quickly during the p2s1 incident — the STOP check only
-runs at the top of the `while` loop. If the escalation ladder is running it can take minutes
-to take effect.
-Fix: add a STOP file check between each escalation level inside the escalation block.
-Alternatively trap SIGTERM and write STOP on container kill. The `touch STOP` UX should
-be instant.
+**1. Diagnose Mistral/OpenRouter + add more free providers** — High priority
+Current stats: Mistral 0% (15 attempts, 0 passes), OpenRouter 0% (1 attempt, 0 passes).
+We're effectively running on 2 providers, not 4. Before adding new providers, diagnose
+why Mistral and OpenRouter fail completely — likely a model config issue or API format
+mismatch, not a fundamental limitation. Then add 2-3 new direct APIs to get to 5-6
+working providers. Candidates: DeepSeek (strong coder, free API), Cerebras (fast
+inference), additional Groq models (Llama variants), and more OpenRouter `:free` models.
+More working providers = more daily quota before Claude escalation = lower cost per task.
+The OpenRouter free model checker (see optional below) would help surface candidates.
 
-**2. Single-attempt-then-switch on task failure** — Medium, reduces 429s
-Currently retries the same provider up to 3× on task failure before switching. Now that
-rollback is in place and error feedback is injected, retrying the same provider quickly
-burns attempts and can trigger 429s. Reduce to 1 attempt per provider for code-writing
-failures — log the result, pass it as context to the next provider, move on. Keep the
-3× retry only for rate-limit recovery (already handled separately).
+**2. STOP file responsiveness** — Easy, real UX pain point
+`touch STOP` currently only takes effect at the top of the `while` loop — between Claude
+calls, not during one. A single Claude call can run 2-5 minutes, so STOP can take that
+long to register.
+Fix: run Claude in the background and poll for STOP every 2 seconds, killing the process
+if STOP appears:
+```bash
+claude ... > "$ITER_JSON" 2>"$ITER_ERR" &
+CLAUDE_PID=$!
+while kill -0 $CLAUDE_PID 2>/dev/null; do
+    [ -f STOP ] && kill $CLAUDE_PID && break
+    sleep 2
+done
+wait $CLAUDE_PID
+```
+Needs care to preserve exit codes and clean up correctly. Same change in both `loop.sh`
+and `aymm-loop.sh`.
 
-**3. Host-only step marker + fast-fail** — Medium, prevents wasted escalation
-When a step requires a host command (`docker build`, etc.), the loop burns the full
-escalation ladder before hitting BLOCKED — every model tries and fails.
-Fix:
-1. Steps marked `HOST:` get skipped by the loop and written to a "run on host" note
-   file. Task pauses until human runs it.
-2. Agent exits with code 3 on environmental constraint — loop skips escalation and
-   goes straight to BLOCKED.
-Observed: p2s1 step 4 (`docker build`) exhausted the full ladder inside the container.
+**3. Cap at 2 attempts per provider, not 3** — Replaces "single-attempt-then-switch"
+Original idea was 1 attempt then rotate to reduce 429s. But with error feedback now
+injected, a second attempt is genuinely valuable — the provider sees what it broke and
+can self-correct. 3 attempts before switching is too many though: if it hasn't fixed it
+in 2 tries with full error context, a fresh provider will do better. Cap at 2: first
+attempt (blind), second attempt (with error feedback), then rotate.
+Note: `loop.sh` already uses "Step 0 gets 2 attempts" — this applies the same logic to
+AYMM's per-provider retry count.
 
 **4. OpenRouter free model checker** — Low difficulty, maintenance utility
 Utility that queries `https://openrouter.ai/api/v1/models`, filters `:free` models, and
 compares against what's configured in `provider-config.sh`. Alerts when a configured model
-changes or new free models appear worth adding as direct APIs. Add to `provider-status.sh
---check-models` or standalone `check-free-models.sh`. Run this before starting any large
-AYMM session.
+changes or new free models appear worth adding. Add to `provider-status.sh --check-models`
+or standalone `check-free-models.sh`. Run before any large AYMM session.
 
 ---
 
 ## Optional / deferred
+
+**Host-only step marker + fast-fail** — mostly solved by existing `**Run:**` header
+The `**Run:** interactive` header already prevents Ralph from picking up tasks that require
+host commands. The HOST: step marker would let you mix container and host steps in one task
+file (e.g. steps 1-3 inside, step 4 `docker build` on host) — but in practice it's easier
+to just split those into two tasks. Only worth building if mixed-step tasks come up
+repeatedly on the external project. Observed failure mode (p2s1 docker build) is avoided
+simply by marking those tasks `**Run:** interactive`.
 
 **Daily quota reset detection** — defer until we hit a real quota
 When a provider hits daily limit (403), read `x-ratelimit-reset` / `Retry-After` header
