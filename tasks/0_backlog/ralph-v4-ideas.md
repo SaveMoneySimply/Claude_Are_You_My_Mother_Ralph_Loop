@@ -1,95 +1,136 @@
-# Ralph v4 — Ideas Backlog
-
-Items deferred from v3. Not scheduled — collect here until there's enough to warrant a planning session.
+# Ralph v4 — Roadmap
 
 ---
 
-## Do next (in this order)
+## Next milestone — test on external project
 
-**1. Move task archival from agent to bash** — Medium-high difficulty, high reliability payoff
-Currently the agent moves `tasks/2_active/<name>.md` to `tasks/3_done/YYYY-MM-DD-<name>.md` and appends to `CHANGELOG.md` as part of executing the final step — instructed by `prompt.md`. This is mechanical state management that belongs in the loop, not a judgment call that needs the agent. Moving it to bash (`loop.sh` / `aymm-loop.sh`) on a pass result would: make the agent's job simpler (fewer things to get wrong on the final step), make archival more reliable (not dependent on the agent following instructions precisely), and keep `prompt.md` focused on just executing the step.
-Fix: after each pass result in `loop.sh`, check if all steps in the task file are `[x]` — if so, close the task from bash. Remove archival instructions from `prompt.md`. Note: if this is done first, the close_task() gap mostly fixes itself since bash handles archival uniformly for both normal and Claude-escalation paths.
+Ralph has been built on itself long enough. The engine is stable, tested, and has real
+pass-rate data. The next milestone is running AYMM on Matt's web project once the blueprint
+and style guide are ready. That real-world run will generate meaningful stats to compare
+against the current baseline (gemini 72%, groq 84%) and reveal failure modes we haven't seen.
 
-**2. close_task() gap when Claude handles final steps via loop.sh escalation** — Easy, ~10 lines, real observed bug
-When aymm-loop.sh escalates to Claude (`SINGLE_TASK=1 bash loop.sh`), loop.sh's own close logic runs — it moves the task file to `3_done/` via `prompt.md` instructions. But aymm-loop.sh's `close_task()` never fires, so the task branch is not merged to main, not deleted, and the `2_active/` file is left as a stale copy. Observed after p1s1: had to manually `git merge --ff-only`, `git branch -d`, and `rm tasks/2_active/...`.
-Fix: after `SINGLE_TASK=1 bash loop.sh` returns, check if task file is gone from `2_active/` — if so, run only the branch merge/delete portion of `close_task()`. If #1 is done first, this may already be resolved.
-
-**3. Pass AYMM failure history to Claude on escalation** — Medium difficulty, medium impact
-When all free providers exhaust and `loop.sh` is called as Claude fallback, inject the `previous-attempts` context from `.ralph/test-log.jsonl` into the prompt so Claude knows what was tried and broken. Currently `run_agent_task.sh` passes this context between free providers, but the handoff to `loop.sh` drops it. Claude succeeded without it in the p1s1 run, but for harder tasks it would help Claude avoid repeating the same broken approaches.
-Fix: write `.ralph/escalation-context.md` from `test-log.jsonl` before calling `SINGLE_TASK=1 bash loop.sh`; have `loop.sh` detect and inject it. ~30 lines across `aymm-loop.sh` + `loop.sh`.
+Everything below is secondary to that milestone.
 
 ---
 
-## Open
+## Confirmed next (in this order after external project)
 
-**AYMM-all mode (`bash ralph.sh aymm --all`)**
-Run the same task through every provider regardless of whether an earlier one passes. Two sub-modes:
-- `--all --pick` — run all providers, Claude picks the best passing response
-- `--all --show` — run all providers, display diffs side by side, human picks
+**1. STOP file responsiveness** — Easy, real UX pain point
+`touch STOP` didn't halt the loop quickly during the p2s1 incident — the STOP check only
+runs at the top of the `while` loop. If the escalation ladder is running it can take minutes
+to take effect.
+Fix: add a STOP file check between each escalation level inside the escalation block.
+Alternatively trap SIGTERM and write STOP on container kill. The `touch STOP` UX should
+be instant.
 
-Open design questions: sequential vs parallel? What does "best" mean for --pick? How to display diffs for --show?
+**2. Single-attempt-then-switch on task failure** — Medium, reduces 429s
+Currently retries the same provider up to 3× on task failure before switching. Now that
+rollback is in place and error feedback is injected, retrying the same provider quickly
+burns attempts and can trigger 429s. Reduce to 1 attempt per provider for code-writing
+failures — log the result, pass it as context to the next provider, move on. Keep the
+3× retry only for rate-limit recovery (already handled separately).
 
-**OpenRouter free model checker**
-Utility that queries `https://openrouter.ai/api/v1/models`, filters for `:free` models, and compares against models currently configured in `provider-config.sh`. Alerts when our configured model changed or new free models appear (candidates for adding as direct APIs). Could be a standalone `check-free-models.sh` or added to `provider-status.sh --check-models`.
+**3. Host-only step marker + fast-fail** — Medium, prevents wasted escalation
+When a step requires a host command (`docker build`, etc.), the loop burns the full
+escalation ladder before hitting BLOCKED — every model tries and fails.
+Fix:
+1. Steps marked `HOST:` get skipped by the loop and written to a "run on host" note
+   file. Task pauses until human runs it.
+2. Agent exits with code 3 on environmental constraint — loop skips escalation and
+   goes straight to BLOCKED.
+Observed: p2s1 step 4 (`docker build`) exhausted the full ladder inside the container.
 
-**Daily quota reset detection**
-When a provider hits its daily limit (403 / quota-exhausted body), read the reset timestamp from response headers (`x-ratelimit-reset`, `Retry-After`) and sleep exactly that duration rather than writing STOP. Only worth building once we have real response examples from each provider hitting their daily limit — inspect `.ralph/http-error-log.jsonl` after a real quota hit.
-
-**Single-attempt-then-switch on task failure (consider alongside rollback)**
-Currently retries the same provider up to 3× on task failure before switching. Once rollback is in place, a failed attempt is clean (no broken baseline), but retrying the same provider quickly can trigger 429s. Consider reducing to 1 attempt per provider for code-writing failures — log the result, pass it as context to the next provider, move on. Keep the retry count for rate-limit recovery (which is already handled separately).
-
-**Host-only step marker + fast-fail for environmental constraints**
-When a loop step requires a host command (e.g. `docker build`, writing outside `/workspace`), the loop currently burns the full escalation ladder before hitting BLOCKED — every model tries and fails, all charged. Two fixes needed:
-1. Task file format: a step marked `HOST:` (or similar) gets skipped by the loop and written to a "run on host" note file instead of attempted. The task pauses at that step until the human runs it and resumes.
-2. Fast-fail exit code: if the agent detects an environmental constraint (no `docker` binary, no network to a required host, etc.), return exit code 3 — loop skips escalation and goes straight to BLOCKED. Observed failure mode: p2s1 step 4 (`docker build`) exhausted the full escalation ladder inside the container, burning significant usage on a hard impossibility.
-
-**STOP file responsiveness**
-`touch STOP` didn't halt the loop quickly during the p2s1 incident — the loop was mid-escalation and the STOP check only runs at the top of the `while` loop. Options: check for STOP between escalation levels, or trap SIGTERM and write STOP on container kill. The `touch STOP` UX should be instant — currently it can take minutes to take effect if the escalation ladder is running.
-
-**Plan mode — update or remove**
-`ralph.sh plan` / `prompt-plan.md` is not wired into the current folder structure — it references `plans/*.md` and `tasks/active/` which no longer exist. Interactive planning with Claude has proven better in practice (back-and-forth produces better task files, scope can be adjusted in real-time). Options: update `prompt-plan.md` to use the current `tasks/0_backlog/` structure and `tasks/1_queue/`, or remove plan mode entirely and document that planning is done interactively. Don't touch until there's a clear reason to keep it.
-
-**Plan-task linkage and auto-archiving**
-Plans and tasks are currently unconnected — `close_task()` infers a phase from the task name prefix but has no awareness of plan files. True automation needs:
-1. `**Plan:** p2-plan.md` header field in each task pointing to its plan file
-2. `close_task()` reads that field, opens the plan file, finds the matching checklist item, marks it `[x]`
-3. When all items in the plan are `[x]`, move the plan file to `_archive/plans/`
+**4. OpenRouter free model checker** — Low difficulty, maintenance utility
+Utility that queries `https://openrouter.ai/api/v1/models`, filters `:free` models, and
+compares against what's configured in `provider-config.sh`. Alerts when a configured model
+changes or new free models appear worth adding as direct APIs. Add to `provider-status.sh
+--check-models` or standalone `check-free-models.sh`. Run this before starting any large
+AYMM session.
 
 ---
 
-## Task-writing practices learned from AYMM failures (2026-05-30)
+## Optional / deferred
 
-These aren't engine changes — they're habits that reduce free provider failure rates. All added to CLAUDE.md.
+**Daily quota reset detection** — defer until we hit a real quota
+When a provider hits daily limit (403), read `x-ratelimit-reset` / `Retry-After` header
+and sleep exactly that duration instead of writing STOP. Not worth building until we have
+real response examples from each provider — inspect `.ralph/http-error-log.jsonl` after
+a real quota hit.
 
-**`bash -n` in every step test that edits a bash file**
-Free providers frequently introduce unbalanced `if/fi` or `{/}`. A step test like `grep -q 'key-string' file.sh` passes even when the file is syntactically broken. Prefixing with `bash -n file.sh &&` catches the error immediately and puts the exact failing line number into `last-test-error.txt` for the next prompt. Without this, the global test-engine run catches it but the error message is less targeted and comes a round later. Observed: all 9 free provider attempts on v4-close-task-gap failed with syntax errors; none fixed it because the step test passed and providers thought they succeeded.
+**Progress-sensitive rollback (Idea 3)** — defer, no data showing it's needed
+Before applying provider changes, snapshot the pass count. On failure, if count went up,
+skip rollback and let the next provider build on partial state. Tradeoff: partial state
+accumulates. Stats show our problem is complete failures, not near-misses — revisit if
+that changes.
 
-**For bash function edits, run the full test suite in `-- test:`**
-`bash -n` alone misses structural problems that are syntactically valid but functionally broken: orphaned code outside a function, duplicate `if` lines, dropped variable declarations. Observed on v4-pass-failure-history: gemini produced 5 separate bugs across two tasks — duplicate `if`, orphaned lines after a misplaced `}`, stray `fi`, wrong jq field names — all of which passed `bash -n`. The full test suite (`(cd project && bash test-engine.sh) | grep -q 'passed, 0 failed'`) would have caught the structural ones immediately.
+**Surgical rollback (Idea 4)** — defer, too slow for current failure profile
+Revert modified files one at a time and re-run the test. Keep changes for files whose
+revert doesn't fix the failure. Runs the full test suite N extra times per failure.
+Only useful when providers partially succeed — same data gap as Idea 3.
 
-**Show the full function in `-- files:`, not just the target lines**
-When a provider only sees the lines it's editing and not the surrounding function boundary, it guesses the brace/fi structure and gets it wrong. Set the range to include a few lines past the closing `}` or `fi` of the full function being modified. Cost: slightly larger payload. Benefit: providers can count brackets correctly.
+**AYMM-all mode (`bash ralph.sh aymm --all`)** — defer, design questions unresolved
+Run the same task through every provider regardless of whether an earlier one passes.
+Sub-modes: `--pick` (Claude picks best passing response) or `--show` (human picks from
+diffs). Open design questions: sequential vs parallel? What does "best" mean? How to
+display diffs? Revisit when there's a concrete use case.
 
-**Prefer describing exact old→new replacements over high-level descriptions for bash edits**
-"Replace these 5 lines with these 6 lines" is safer than "add a branch-existence check". Providers that see the exact old text can use `<edit>` blocks precisely. High-level descriptions lead to providers rewriting surrounding code they shouldn't touch.
+**Plan-task linkage and auto-archiving** — defer, low priority
+Plans and tasks are unconnected. True automation would need a `**Plan:**` header field
+in each task, `close_task()` marking plan checklist items `[x]`, and auto-archiving plans
+when all items complete. Complex. Only matters at scale — revisit when running multi-phase
+projects.
 
-**Strip `-- test:` and `-- files:` from the agent's prompt** ✅ done 2026-05-30
-Agents that see the test command can game it — adding a matching string as a comment or echoing the expected output without implementing the feature. Both annotations are infrastructure for bash, not spec for the agent. Stripping them means the agent implements from the human-readable "done when:" description only; if the test fails, it gets the error output back via `last-test-error.txt` and can diagnose from there. Implemented in `bundle_context()` (`run_agent_task.sh`) and `build_step_prompt()` / `build_context_prompt()` (`loop.sh`).
+**Plan mode — update or remove** — defer, low priority
+`ralph.sh plan` / `prompt-plan.md` references old folder structure. Interactive planning
+has proven better in practice. Leave it until there's a clear reason to keep or remove it.
+
+---
+
+## Task-writing practices (in CLAUDE.md — not engine changes)
+
+These reduce free provider failure rates. All documented in CLAUDE.md already.
+
+- **One independent assertion per step** — split when assertion A could pass while B fails
+- **`bash -n <file> &&` prefix** on every step test that edits a bash script
+- **Full test suite in `-- test:`** for bash function edits, not just `bash -n`
+- **Full function in `-- files:`** — include lines past closing `}` / `fi`
+- **Exact old→new text** for bash edits, not high-level descriptions
+- **`-- test:` and `-- files:` stripped from agent prompt** ✅ implemented — agent sees
+  only the spec; bash runs the test and feeds errors back via `last-test-error.txt`
 
 ---
 
 ## Done
 
-**Timestamp done-task filenames** ✅ done in v3
+**Timestamp done-task filenames** ✅ v3
 
-**Rollback on test failure** ✅ implemented in `run_agent_task.sh`. Bug fixed 2026-05-29: rollback was also reverting the task mv (1_queue → 2_active), causing the failure counter to reset every iteration. Fixed by excluding `tasks/` from the rollback scope. Task file snapshot/restore added for same reason.
+**Rollback on test failure** ✅ `run_agent_task.sh` — excludes `tasks/` from rollback
+scope; task file snapshot/restore prevents false-completion on rollback.
 
-**Error feedback in retry prompt (Idea 1)** ✅ done 2026-05-30 — `bundle_context()` now injects `last-test-error.txt` immediately after the current step. `previous-attempts` trimmed to provider + error only (removed full response body to prevent Groq 413).
+**Error feedback in retry prompt** ✅ 2026-05-30 — `last-test-error.txt` injected after
+the step; `previous-attempts` trimmed to provider + error (no code blobs → avoids Groq 413).
 
-**One assertion per step (Idea 2)** ✅ documented 2026-05-30 — added to CLAUDE.md task-writing guidance. No engine code needed.
+**One assertion per step** ✅ 2026-05-30 — documented in CLAUDE.md.
 
-**`|| echo` fallback defaults** ✅ fixed 2026-05-30 — 7 dead `|| echo` fallbacks in `loop.sh` and `aymm-loop.sh` replaced with `local val; ${val:-default}` pattern.
+**`|| echo` fallback defaults** ✅ 2026-05-30 — 7 dead fallbacks replaced with
+`local val; ${val:-default}` in `loop.sh` and `aymm-loop.sh`.
 
-**`.ralph/` folder maintenance** ✅ done 2026-05-30 — `loop.log` rotates to `.ralph/archive/` on startup; iter files deleted on task close; failure counter entries pruned on task close.
+**`.ralph/` folder maintenance** ✅ 2026-05-30 — `loop.log` rotates on startup; iter
+files deleted on task close; failure counter entries pruned on task close.
 
-**`ralph.sh stats`** ✅ done 2026-05-30 — all-time and last-7-days pass rates per provider; per-task attempt counts.
+**`ralph.sh stats`** ✅ 2026-05-30 — all-time + last-7-days pass rates per provider;
+per-task attempt counts.
+
+**Move task archival from agent to bash** ✅ 2026-05-30 — `loop.sh` detects all steps
+`[x]` after pass and closes the task; `prompt.md` no longer instructs file moves.
+
+**close_task() gap on Claude escalation** ✅ 2026-05-30 — branch merge/delete now guards
+with `git branch --list` existence check; post-escalation block in `aymm-loop.sh` handles
+all cases correctly.
+
+**Pass AYMM failure history to Claude on escalation** ✅ 2026-05-30 — `aymm-loop.sh`
+writes `.ralph/escalation-context.md` before calling `loop.sh`; both prompt builders
+inject it when present.
+
+**Strip `-- test:` and `-- files:` from agent prompt** ✅ 2026-05-30 — implemented in
+`bundle_context()`, `build_step_prompt()`, `build_context_prompt()`.
