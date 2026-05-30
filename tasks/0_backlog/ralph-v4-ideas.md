@@ -54,6 +54,58 @@ Also needs a decision on folder structure: currently plans, tasks, and ideas are
 **Move task archival from agent to bash**
 Currently the agent moves `tasks/2_active/<name>.md` to `tasks/3_done/YYYY-MM-DD-<name>.md` and appends to `CHANGELOG.md` as part of executing the final step — instructed by `prompt.md`. This is mechanical state management that belongs in the loop, not a judgment call that needs the agent. Moving it to bash (`loop.sh` / `aymm-loop.sh`) on a pass result would: make the agent's job simpler (fewer things to get wrong on the final step), make archival more reliable (not dependent on the agent following instructions precisely), and keep `prompt.md` focused on just executing the step. Would require loop.sh to detect when a task file has been closed by checking whether `2_active/<name>.md` still exists after a pass.
 
-**Matt's Thoughts**
+---
 
--I need to understand what ralph.sh plan mode does and try to use it for the next planing session
+## Free provider success rate ideas (sketched 2026-05-30)
+
+Four ideas for helping free providers succeed when tests partially pass, ranked by impact vs effort.
+
+**Idea 1 — Error feedback in retry prompt** ⭐ highest priority
+
+`bundle_context()` in `run_agent_task.sh` already reads `.ralph/last-step.txt`. Add a section that injects `.ralph/last-test-error.txt` when it exists (written on failure, deleted on success — its presence already signals "this is a retry").
+
+```bash
+# Near end of bundle_context(), after injecting the step
+if [[ -f "${SCRIPT_DIR}/.ralph/last-test-error.txt" ]]; then
+    printf '\n## Previous attempt failed\n\n'
+    printf 'Tests that ran:\n```\n%s\n```\n' \
+        "$(cat "${SCRIPT_DIR}/.ralph/last-test-error.txt")"
+    printf '\nFix what failed. Do not remove passing tests.\n'
+fi
+```
+
+Tradeoff: longer prompts — Groq 413 was already triggered. May need to truncate. Both `run_agent_task.sh` and `project/run_agent_task.sh` need the change.
+
+**Idea 2 — One assertion per step**
+
+Task authoring practice, not engine code. Each step writes and validates exactly one test assertion. On failure only one assertion rolls back. Worth it for complex multi-assertion steps, overkill for trivial ones.
+
+**Idea 3 — Progress-sensitive rollback**
+
+Before applying provider changes, snapshot the pass count. On failure, if count went up, skip the rollback and let the next provider build on partial state.
+
+```bash
+baseline_passes=$(cd project && bash test-engine.sh 2>&1 \
+    | grep -oP '^\d+(?= passed)' || echo 0)
+
+# Inside rollback block
+current_passes=$(grep -oP '^\d+(?= passed)' \
+    "${SCRIPT_DIR}/.ralph/last-test-error.txt" || echo 0)
+if [[ "$current_passes" -gt "$baseline_passes" ]]; then
+    echo "Progress: $baseline_passes → $current_passes passes — keeping changes"
+    exit 2   # still counts as failure for provider rotation
+fi
+# else: full rollback as normal
+```
+
+Tradeoff: partial state accumulates. Pairs well with Idea 1.
+
+**Idea 4 — Surgical rollback**
+
+On failure, try reverting modified files one at a time and re-running the test. Keep changes for any file whose revert doesn't fix the failure. Runs the full test suite N extra times per failure — slow. Most useful when providers touch both code and task file.
+
+---
+
+## Matt's Thoughts
+
+- I need to understand what ralph.sh plan mode does and try to use it for the next planing session
