@@ -164,8 +164,13 @@ pick_task() {
 # Build focused step prompt: prompt.md base + task context + extracted next step
 build_step_prompt() {
     local task="$1" task_file="$2" next_step="$3"
-    local out=".ralph/prompt-step-${task}.md"
-    {
+        cat prompt.md
+        if [ -f ".ralph/escalation-context.md" ]; then
+            echo ""
+            echo "## Free provider attempts (failed)"
+            cat ".ralph/escalation-context.md"
+        fi
+        echo ""
         cat prompt.md
         echo ""
         echo "---"
@@ -179,8 +184,13 @@ build_step_prompt() {
         cat "${task_file}"
     } > "$out"
     echo "$out"
-}
-
+        cat prompt.md
+        if [ -f ".ralph/escalation-context.md" ]; then
+            echo ""
+            echo "## Free provider attempts (failed)"
+            cat ".ralph/escalation-context.md"
+        fi
+        echo ""
 # Build an extended prompt with surrounding task context, returns file path
 build_context_prompt() {
     local task="$1" task_file="$2" next_step="$3"
