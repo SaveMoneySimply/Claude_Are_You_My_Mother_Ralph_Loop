@@ -57,6 +57,33 @@ read_step_mode() {
     echo "${val:-any}"
 }
 
+# Read the Effort: header from a task file. Returns lowercase word (low/medium/high/etc.)
+read_task_effort() {
+    local task_file="$1"
+    grep -oiP '\bEffort:\s*\**\s*\K\w+' "$task_file" 2>/dev/null \
+        | head -1 | tr '[:upper:]' '[:lower:]'
+}
+
+# Return space-separated provider list for a given effort level.
+# Drives which models are attempted and in what order for this task.
+#   low/minimal  — 8b first (abundant), light escalation; skip 120b
+#   medium       — 8b free shot, then coder/reasoner, then quality reserves
+#   high/max     — skip 8b entirely; start at best coder, escalate fast to quality
+#   default      — same as medium
+build_provider_order() {
+    local effort="$1"
+    case "$effort" in
+        low|minimal|lowest)
+            echo "groq_8b groq_qwen3 groq_20b groq_70b" ;;
+        medium)
+            echo "groq_8b groq_qwen3 groq_70b groq_120b" ;;
+        high|xhigh|max|maximum|highest)
+            echo "groq_qwen3 groq_70b groq_120b" ;;
+        *)
+            echo "groq_8b groq_qwen3 groq_70b groq_120b" ;;
+    esac
+}
+
 # Returns the current provider name given PROVIDER_INDEX and PROVIDERS array
 current_provider() {
     echo "${PROVIDERS[$PROVIDER_INDEX]:-}"
@@ -327,6 +354,7 @@ AUTONOMY="$(read_autonomy)"
 PROVIDER_INDEX=0
 RATE_LIMIT_ADVANCES=0
 RATE_LIMIT_SLEEP_COUNT=0
+PROVIDERS_TASK=""   # tracks which task PROVIDERS was last built for
 declare -A TASKS_ATTEMPTED
 declare -A COOLDOWN_COUNT
 
@@ -359,6 +387,8 @@ while [[ ! -f STOP ]]; do
             mv "$next_task" "tasks/2_active/${CURRENT_TASK}.md"
             echo "$CURRENT_TASK" > .ralph/last-task.txt
             reset_all_failure_counts "$CURRENT_TASK"
+            PROVIDER_INDEX=0
+            RATE_LIMIT_ADVANCES=0
             echo "Picked task from queue: ${CURRENT_TASK}"
         else
             if [[ "${AYMM_ONLY:-}" == "1" ]]; then
@@ -369,6 +399,16 @@ while [[ ! -f STOP ]]; do
             bash "${ENGINEDIR}/loop.sh"
             break
         fi
+    fi
+
+    # ── Effort-aware provider ordering (Phase 2) ────────────────────────────
+    # Rebuild PROVIDERS when task changes. PROVIDER_INDEX is preserved across
+    # iterations for the same task so mid-task escalation state survives.
+    if [[ "$CURRENT_TASK" != "$PROVIDERS_TASK" ]]; then
+        TASK_EFFORT="$(read_task_effort "tasks/2_active/${CURRENT_TASK}.md")"
+        readarray -t PROVIDERS < <(build_provider_order "$TASK_EFFORT" | tr ' ' '\n')
+        PROVIDERS_TASK="$CURRENT_TASK"
+        echo "Provider order for '${CURRENT_TASK}' (effort=${TASK_EFFORT:-unset}): ${PROVIDERS[*]}"
     fi
 
     RUN_MODE="$(read_run_mode "tasks/2_active/${CURRENT_TASK}.md")"

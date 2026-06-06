@@ -86,14 +86,24 @@ These habits produce better outcomes, especially with AYMM free providers:
 - **Sequential steps on the same file need cumulative tests** — if steps T3, T4, T5 all edit the same file, T5's test must also assert T3's and T4's additions still exist.
 - **Exact grep strings must match the step description verbatim** — `-- test:` is stripped from the agent prompt. If the test does `grep -q 'exact phrase'`, that phrase must appear literally in the step description or the provider will paraphrase it and fail.
 - **All-Claude tasks should use `Run: ralph`** — routing every step through AYMM adds two iterations per step with zero benefit when there are no free-provider-eligible steps.
+- **Set `Effort:` honestly — it controls which models are tried.** `low` starts at the 14,400 RPD workhorse and escalates lightly. `medium` (default) gives the free shot at 8B then escalates to the coder/reasoner tier. `high` skips 8B entirely and starts at the best available reasoning model — use this only when the task genuinely needs it, not as a safe default. Over-marking tasks `high` burns the quality reserve faster with no benefit.
 
 **AYMM (free provider) tasks**
 - Always set `**Allowed files:**` for AYMM tasks. Free providers regularly emit file blocks for files they shouldn't touch (test files, unrelated scripts, the task file itself). Scoping to specific files prevents silent corruption.
 - Keep token estimates honest — if the actual output exceeds 2× the estimate the loop stops. Under-estimating wastes a run; over-estimating is fine.
 - Prefer `<edit>` blocks over full `<file>` rewrites in your step descriptions. Full rewrites from free providers frequently truncate or drop functions.
 - **Mark edits to existing TypeScript `-- mode: claude`** — schema files, route handlers, ORM queries, typed indexes. Free providers reliably corrupt these with bad imports, wrong types, or dropped declarations. New self-contained files (utilities, new routes) are safe for AYMM.
-- **Gemini times out on large-context steps** — any step injecting >500 tokens of `-- files:` context is unreliable on Gemini. Keep file ranges tight.
-- **Mistral (codestral) returns prose instead of file blocks on new files >100 lines** — treat it as a last-resort provider for large new-file tasks.
+- **Keep total injected lines under 500 per step.** Most Groq models have 6,000 TPM. A step prompt (system + task + step spec + injected files) easily exceeds that with 500+ lines of context, causing silent truncation — the model returns a partial response that passes the grep test but drops half the implementation. If a step genuinely needs more context, add `-- mode: context` to route it to the high-TPM model (30,000 TPM) instead.
+- **Use `-- mode:` annotations to override per-step routing:**
+
+| Annotation | What it does |
+|---|---|
+| `-- mode: claude` | Claude only — for TypeScript, typed code, anything free providers corrupt |
+| `-- mode: aymm` | Normal Groq routing (default when absent) |
+| `-- mode: fast` | Always start at the fastest/lightest model — for one-liner mechanical edits |
+| `-- mode: reason` | Start at the best reasoning model — for hard debugging, complex logic |
+| `-- mode: context` | Route to the high-TPM model — for steps injecting large file ranges (500+ lines) |
+
 - **Never `source` a full loop script in a test.** `source loop.sh` or `source aymm-loop.sh` runs the main loop and blocks the container indefinitely. To test functions that live in those scripts, copy them verbatim into `test-engine.sh` (same approach as `get_step_spec` in te-03 and the failure counter functions in te-05). If a function is needed in many tests, consider extracting it to a sourced library file instead.
 
 **Done filenames**
@@ -115,6 +125,28 @@ Effort scales:
 - **haiku**: `--effort` omitted
 
 Defaults when header values are missing: `sonnet` + `high`. Unsupported effort levels fall back to the highest supported — no crash.
+
+### AYMM model routing
+
+When running `bash ralph-aymm/ralph.sh aymm`, the `Effort:` header controls which Groq models are tried and in what order before falling back to Claude. All Groq models share one `GROQ_API_KEY`; rate limits are per-model.
+
+| Effort | Model chain | Why |
+|---|---|---|
+| `low` / `minimal` | 8b → qwen3 → 20b → 70b → Claude | 8B handles most mechanical edits; light escalation preserves quality budget |
+| `medium` (default) | 8b → qwen3 → 70b → 120b → Claude | Free shot at 8B, then best coder, then quality reserves |
+| `high` / `max` | qwen3 → 70b → 120b → Claude | Skips 8B — hard tasks will fail on it and waste an attempt |
+| context override | scout → 70b → Claude | Injected automatically when step has 500+ lines of `-- files:` context; scout has 30K TPM vs 6K for other models |
+
+**Free tier model reference (verified June 2026):**
+
+| Alias | Model ID | RPD | TPM | Best for |
+|---|---|---|---|---|
+| `groq_8b` | `llama-3.1-8b-instant` | 14,400 | 6,000 | Mechanical edits, high volume |
+| `groq_qwen3` | `qwen/qwen3-32b` | 1,000 | 6,000 | Coding, logic, math (60 RPM) |
+| `groq_20b` | `openai/gpt-oss-20b` | 1,000 | 8,000 | Fast quality bridge |
+| `groq_70b` | `llama-3.3-70b-versatile` | 1,000 | 12,000 | Complex reasoning, quality reserve |
+| `groq_120b` | `openai/gpt-oss-120b` | 1,000 | 8,000 | Max quality before Claude |
+| `groq_scout` | `meta-llama/llama-4-scout-17b-16e-instruct` | 1,000 | 30,000 | Large file injection (context override only) |
 
 ## Recovery and Escalation
 
