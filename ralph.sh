@@ -132,7 +132,7 @@ ralph_init() {
 ## Ralph settings
 - Autonomy: low
 - Loop version: AYMM
-- Provider count: 4 (Gemini, Mistral, Groq, OpenRouter) before Claude
+- Providers: Groq-only (groq_8b → groq_scout → groq_qwen32b → groq_deepseek → groq_kimi → groq_70b → groq_120b → Claude)
 
 ## Firewall additions
 # Any extra domains beyond the default allowlist (e.g., if you need to `curl` something)
@@ -271,17 +271,16 @@ case "$MODE" in
             {
                 total_attempts: $total_attempts,
                 success_rate: if $total_attempts > 0 then ($success_count / $total_attempts * 100) | round else 0 end,
-                provider_stats: ([
-                    "gemini", "mistral", "groq", "openrouter", "claude"
-                ] | map({
-                    provider: .,
-                    success_rate: (
-                        (map(select(.provider == .provider and .outcome == "success")) | length) as $prov_success |
-                        (map(select(.provider == .provider and .outcome == "failure")) | length) as $prov_failure |
-                        ($prov_success + $prov_failure) as $prov_total |
-                        if $prov_total > 0 then ($prov_success / $prov_total * 100) | round else 0 end
-                    )
-                }))
+                provider_stats: (
+                    [.[].provider] | unique | map(. as $p | {
+                        provider: $p,
+                        success: (map(select(.provider == $p and .outcome == "success")) | length),
+                        failure: (map(select(.provider == $p and .outcome == "failure")) | length)
+                    } | . + {
+                        total: (.success + .failure),
+                        success_rate: (if (.success + .failure) > 0 then (.success / (.success + .failure) * 100) | round else 0 end)
+                    })
+                )
             }
         ' "$LOG"
         ;;
