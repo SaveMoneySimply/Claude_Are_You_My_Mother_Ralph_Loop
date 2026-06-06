@@ -19,6 +19,7 @@ else
     ENGINEDIR="$WORKDIR"
 fi
 rm -f "${WORKDIR}/STOP"
+rm -f "${WORKDIR}/.ralph/aymm-escalate.txt"
 echo "aymm-loop.sh started, STOP cleared"
 
 # ---------------------------------------------------------------------------
@@ -571,7 +572,7 @@ while [[ ! -f STOP ]]; do
     # Insert scout at the current position once per task (on first large-context step).
     if [[ "$CURRENT_TASK" != "${SCOUT_INSERTED:-}" ]]; then
         CONTEXT_LINES="$(estimate_step_context_lines "tasks/2_active/${CURRENT_TASK}.md")"
-        if (( CONTEXT_LINES > 500 )); then
+        if (( CONTEXT_LINES > $(provider_tpm "${PROVIDERS[$PROVIDER_INDEX]:-groq_8b}") / 12 )); then
             # Only insert if scout isn't already at or before current position
             already_at_front=false
             for (( pi=0; pi<=PROVIDER_INDEX; pi++ )); do

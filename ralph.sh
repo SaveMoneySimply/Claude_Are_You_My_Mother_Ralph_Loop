@@ -133,7 +133,7 @@ ralph_init() {
 ## Ralph settings
 - Autonomy: low
 - Loop version: AYMM
-- Providers: Groq-only (groq_8b → groq_scout → groq_qwen32b → groq_deepseek → groq_kimi → groq_70b → groq_120b → Claude)
+- Providers: Groq-only (groq_8b → groq_qwen3 → groq_20b → groq_70b → groq_120b → Claude; effort-aware ordering applies)
 
 ## Firewall additions
 # Any extra domains beyond the default allowlist (e.g., if you need to `curl` something)

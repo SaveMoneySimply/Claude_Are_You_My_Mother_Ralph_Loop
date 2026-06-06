@@ -2,6 +2,10 @@
 
 <!-- Append-only. One entry per completed task. -->
 <!-- Format: YYYY-MM-DD | task-name | one-line description | [task](tasks/done/name.md) -->
+2026-06-06 | use-dynamic-tpm-threshold | Replace hardcoded 500-line context threshold with dynamic provider_tpm()/12 in Phase 3 scout override | [task](tasks/3_done/2026-06-06-use-dynamic-tpm-threshold.md)
+2026-06-06 | fix-bug022-local-keyword | Remove `local _est` used outside a function in loop.sh line 416 | [task](tasks/3_done/2026-06-06-fix-bug022-local-keyword.md)
+2026-06-06 | add-provider-tpm-function | Add provider_tpm() to provider-config.sh with per-model TPM values | [task](tasks/3_done/2026-06-06-add-provider-tpm-function.md)
+2026-06-06 | groq-only-routing | Rewrite provider-config.sh as pure Groq-only with verified active models; add ENH-003 effort-aware ordering (Phase 2) and context-aware scout override (Phase 3) to aymm-loop.sh; add tee logging to ralph.sh; update CLAUDE.md with AYMM routing docs
 2026-05-30 | te-02-task-pipeline | Add task pipeline tests to test-engine.sh: pick_task, step management, and STOP detection (13 total tests) | [task](tasks/3_done/2026-05-30-te-02-task-pipeline.md)
 2026-05-29 | te-01-skeleton | Create test-engine.sh with helper functions and syntax checks for all 9 engine scripts | [task](tasks/3_done/2026-05-29-te-01-skeleton.md)
 2026-05-29 | p1s1-timestamp-done-filenames | Prefix done task files with YYYY-MM-DD in aymm-loop.sh, loop.sh, and prompt.md | [task](tasks/3_done/2026-05-29-p1s1-timestamp-done-filenames.md)
