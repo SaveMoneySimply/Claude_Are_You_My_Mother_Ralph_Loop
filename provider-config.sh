@@ -65,6 +65,19 @@ provider_api_format() {
     esac
 }
 
+provider_tpm() {
+    case "$1" in
+        groq_8b)        echo 6000 ;;
+        groq_scout)     echo 30000 ;;
+        groq_qwen3)     echo 6000 ;;
+        groq_20b)       echo 8000 ;;
+        groq_70b)       echo 12000 ;;
+        groq_120b)      echo 8000 ;;
+        groq_compound)  echo 70000 ;;
+        *)              echo 6000 ;;
+    esac
+}
+
 loop_version() {
     echo "aymm-1.2"
 }

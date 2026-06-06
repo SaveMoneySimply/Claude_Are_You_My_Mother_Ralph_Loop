@@ -6,7 +6,7 @@
 
 ## Steps
 
-- [ ] Remove the `local` keyword from the `_est` variable declaration inside the main while-loop body in loop.sh around line 416. The `local` keyword is only valid inside functions — using it in the main loop body is a bash error. Change the two lines:
+- [x] Remove the `local` keyword from the `_est` variable declaration inside the main while-loop body in loop.sh around line 416. The `local` keyword is only valid inside functions — using it in the main loop body is a bash error. Change the two lines:
   ```
   local _est
   _est=$(grep 'Tokens estimated' "$TASK_FILE" | grep -oP '\d+' | head -1)
