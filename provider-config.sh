@@ -3,17 +3,17 @@
 # Source this file to get PROVIDERS array and per-provider config functions.
 #
 # All providers are Groq model variants sharing one GROQ_API_KEY.
-# Rate limits are per-model, giving ~72,000+ free requests/day across all variants.
-#
-# Model IDs verified at console.groq.com/playground — re-verify periodically.
+# Rate limits verified against console.groq.com/docs/rate-limits (June 2026).
 #
 # RPD budget by tier:
-#   14,400 RPD: groq_8b, groq_scout, groq_qwen32b, groq_deepseek, groq_kimi
-#    1,000 RPD: groq_70b, groq_120b  (quality reserve — spend wisely)
-#      250 RPD: groq_compound        (director only — not in default PROVIDERS)
+#   14,400 RPD: groq_8b only — the free workhorse
+#    1,000 RPD: groq_scout, groq_qwen3, groq_20b, groq_70b, groq_120b
+#      250 RPD: groq_compound (director only — not in default PROVIDERS)
+#
+# Default escalation: fast workhorse → coder/reasoner → speed-quality bridge → quality reserve → max
+# Phase 2 (aymm-loop.sh) overrides this per-task based on Effort: header.
 
-# Default escalation order: fast workhorse → reasoning → quality reserve
-PROVIDERS=(groq_8b groq_scout groq_qwen32b groq_deepseek groq_kimi groq_70b groq_120b)
+PROVIDERS=(groq_8b groq_qwen3 groq_20b groq_70b groq_120b)
 
 provider_api_url() {
     case "$1" in
@@ -26,11 +26,10 @@ provider_model() {
     case "$1" in
         groq_8b)        echo "llama-3.1-8b-instant" ;;
         groq_scout)     echo "meta-llama/llama-4-scout-17b-16e-instruct" ;;
-        groq_qwen32b)   echo "qwen-qwq-32b" ;;
-        groq_deepseek)  echo "deepseek-r1-distill-llama-70b" ;;
-        groq_kimi)      echo "kimi-k2-instruct" ;;
+        groq_qwen3)     echo "qwen/qwen3-32b" ;;
+        groq_20b)       echo "openai/gpt-oss-20b" ;;
         groq_70b)       echo "llama-3.3-70b-versatile" ;;
-        groq_120b)      echo "gpt-oss-120b" ;;
+        groq_120b)      echo "openai/gpt-oss-120b" ;;
         groq_compound)  echo "compound-beta" ;;
         *)              echo "" ;;
     esac
@@ -49,9 +48,8 @@ provider_max_attempts() {
     case "$1" in
         groq_8b)        echo 2 ;;
         groq_scout)     echo 2 ;;
-        groq_qwen32b)   echo 2 ;;
-        groq_deepseek)  echo 2 ;;
-        groq_kimi)      echo 2 ;;
+        groq_qwen3)     echo 2 ;;
+        groq_20b)       echo 2 ;;
         groq_70b)       echo 3 ;;  # quality reserve — worth more attempts
         groq_120b)      echo 2 ;;
         groq_compound)  echo 1 ;;  # 250 RPD — use once, don't retry
@@ -68,7 +66,7 @@ provider_api_format() {
 }
 
 loop_version() {
-    echo "aymm-1.1"
+    echo "aymm-1.2"
 }
 
 provider_count() {
