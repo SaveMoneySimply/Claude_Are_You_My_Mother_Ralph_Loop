@@ -41,6 +41,7 @@ _docker_run_ralph() {
     shift # Remove loop_script from arguments
     local args="$@" # Remaining arguments passed to the loop script
     echo "Running Ralph in Docker with $loop_script..."
+    mkdir -p .ralph
     docker run --rm \
         --cap-add=NET_ADMIN \
         --cap-add=NET_RAW \
@@ -55,7 +56,7 @@ _docker_run_ralph() {
         -e GEMINI_API_KEY="${GEMINI_API_KEY:-}" \
         -e OLLAMA_HOST="${OLLAMA_HOST:-}" \
         ralph-aymm-agent \
-        bash "/engine/$loop_script" $args
+        bash "/engine/$loop_script" $args 2>&1 | tee -a .ralph/loop.log
 }
 
 # ─── Task Management Functions ──────────────────────────────────────────────
