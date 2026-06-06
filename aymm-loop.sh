@@ -552,6 +552,22 @@ while [[ ! -f STOP ]]; do
         continue
     fi
 
+    # ── Per-step mode: fast / reason ────────────────────────────────────────────
+    # fast  — reset to start of provider chain (lightest model first)
+    # reason — skip to first heavy reasoning model (groq_70b or groq_120b)
+    if [[ "$STEP_MODE" == "fast" ]]; then
+        PROVIDER_INDEX=0
+        echo "Step marked mode:fast — starting at ${PROVIDERS[0]:-groq_8b}"
+    elif [[ "$STEP_MODE" == "reason" ]]; then
+        for (( _ri=0; _ri<${#PROVIDERS[@]}; _ri++ )); do
+            if [[ "${PROVIDERS[$_ri]}" == "groq_70b" || "${PROVIDERS[$_ri]}" == "groq_120b" ]]; then
+                PROVIDER_INDEX=$_ri
+                break
+            fi
+        done
+        echo "Step marked mode:reason — starting at ${PROVIDERS[$PROVIDER_INDEX]}"
+    fi
+
     # ── BUG-020 fix: if no unchecked steps remain, close via loop.sh directly ──
     # Without this, run_agent_task.sh exits 1 ("no unchecked steps"), exhausts all
     # providers, and triggers a STOP via the escalation path. Delegating directly
