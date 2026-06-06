@@ -84,6 +84,34 @@ build_provider_order() {
     esac
 }
 
+# Estimate total injected lines from the -- files: annotation in the next unchecked step.
+# Used to detect steps that would exceed low-TPM models' 6K token/min ceiling.
+estimate_step_context_lines() {
+    local task_file="$1"
+    local step files_spec total=0
+    step="$(grep -m1 '^- \[ \]' "$task_file" 2>/dev/null)"
+    # Extract -- files: value; strip anything from the next ' --' onward
+    files_spec="$(printf '%s' "$step" \
+        | sed -n 's/.*-- files:[[:space:]]*//p' \
+        | sed 's/[[:space:]]*--[[:space:]].*//')"
+    [[ -z "$files_spec" ]] && echo 0 && return
+
+    while IFS= read -r spec; do
+        # Trim leading/trailing whitespace
+        spec="${spec#"${spec%%[![:space:]]*}"}"
+        spec="${spec%"${spec##*[![:space:]]}"}"
+        [[ -z "$spec" ]] && continue
+        local fpath="${spec%%:*}"
+        local rest="${spec#*:}"
+        if [[ "$rest" != "$spec" ]] && [[ "$rest" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            total=$(( total + ${BASH_REMATCH[2]} - ${BASH_REMATCH[1]} ))
+        elif [[ -f "${WORKDIR}/${fpath}" ]]; then
+            total=$(( total + $(wc -l < "${WORKDIR}/${fpath}" 2>/dev/null || echo 0) ))
+        fi
+    done < <(printf '%s\n' "$files_spec" | tr ',' '\n')
+    echo "$total"
+}
+
 # Returns the current provider name given PROVIDER_INDEX and PROVIDERS array
 current_provider() {
     echo "${PROVIDERS[$PROVIDER_INDEX]:-}"
@@ -354,7 +382,8 @@ AUTONOMY="$(read_autonomy)"
 PROVIDER_INDEX=0
 RATE_LIMIT_ADVANCES=0
 RATE_LIMIT_SLEEP_COUNT=0
-PROVIDERS_TASK=""   # tracks which task PROVIDERS was last built for
+PROVIDERS_TASK=""     # tracks which task PROVIDERS was last built for
+SCOUT_INSERTED=""   # tracks which task had groq_scout inserted for context override
 declare -A TASKS_ATTEMPTED
 declare -A COOLDOWN_COUNT
 
@@ -533,6 +562,28 @@ while [[ ! -f STOP ]]; do
         PROVIDER_INDEX=0
         RATE_LIMIT_ADVANCES=0
         continue
+    fi
+
+    # ── Context override (Phase 3) ───────────────────────────────────────────
+    # If the next step injects >500 lines of file context, most Groq models will
+    # hit their 6K TPM ceiling and silently truncate the response — passing grep
+    # tests while missing half the implementation. groq_scout has 30K TPM.
+    # Insert scout at the current position once per task (on first large-context step).
+    if [[ "$CURRENT_TASK" != "${SCOUT_INSERTED:-}" ]]; then
+        CONTEXT_LINES="$(estimate_step_context_lines "tasks/2_active/${CURRENT_TASK}.md")"
+        if (( CONTEXT_LINES > 500 )); then
+            # Only insert if scout isn't already at or before current position
+            already_at_front=false
+            for (( pi=0; pi<=PROVIDER_INDEX; pi++ )); do
+                [[ "${PROVIDERS[$pi]:-}" == "groq_scout" ]] && already_at_front=true && break
+            done
+            if [[ "$already_at_front" != "true" ]]; then
+                PROVIDERS=("${PROVIDERS[@]:0:$PROVIDER_INDEX}" "groq_scout" "${PROVIDERS[@]:$PROVIDER_INDEX}")
+                CURRENT_PROVIDER="$(current_provider)"
+                SCOUT_INSERTED="$CURRENT_TASK"
+                echo "Context override: ${CONTEXT_LINES} injected lines — inserting groq_scout (30K TPM) before ${PROVIDERS[$((PROVIDER_INDEX+1))]:-claude}"
+            fi
+        fi
     fi
 
     # ── Inner execution loop ─────────────────────────────────────────────────
