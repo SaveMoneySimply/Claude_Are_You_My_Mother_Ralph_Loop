@@ -159,6 +159,112 @@ Check `tasks/3_done/` to confirm expected tasks landed there. Run the project's 
 
 ---
 
+## Capturing a field report (for Ralph improvement)
+
+After a run — or when something breaks interestingly — generate a field report to bring back to the Ralph source repo. This is how the engine gets improved: real failure data beats guessing.
+
+### Generate the stats summary
+
+```bash
+bash ralph-aymm/ralph.sh stats
+```
+
+Paste the full JSON output into your field report. It shows per-provider pass rates and total attempts — the primary signal for routing decisions.
+
+### Capture failures
+
+For each task that failed or blocked, capture:
+
+```bash
+# The blocked task record
+cat BLOCKED.md
+
+# The last test error
+cat .ralph/last-test-error.txt
+
+# The broken output from the last failing provider
+ls .ralph/last-failed-attempt/
+cat .ralph/last-failed-attempt/test-error.txt
+# + any .sh or .ts files in that folder
+```
+
+### Capture the HTTP error log
+
+Rate limit hits, 403s, and unexpected API responses are logged here:
+
+```bash
+cat .ralph/http-error-log.jsonl
+```
+
+### Capture the full test log
+
+Per-step pass/fail with provider and task context:
+
+```bash
+cat .ralph/test-log.jsonl
+```
+
+### Capture the loop log around a failure
+
+Find the iteration where a task went wrong and grab the surrounding context:
+
+```bash
+grep -n "Task: <task-name>" .ralph/loop.log | tail -5
+# Use the line numbers to extract the relevant section
+sed -n '200,280p' .ralph/loop.log   # adjust range
+```
+
+### Write a field-report.md
+
+Create a file `handoffs/field-report-YYYY-MM-DD.md` with this structure:
+
+```markdown
+# Field Report — YYYY-MM-DD
+
+## Run summary
+- Tasks completed: N
+- Tasks blocked: N
+- Total iterations: N
+- Provider stats: [paste ralph.sh stats output]
+
+## What worked well
+- [e.g. groq_qwen3 handled all bash edits cleanly]
+
+## What failed and why
+For each blocked or repeatedly-failing task:
+- **Task:** <name>
+- **Step:** <step description>
+- **Providers tried:** groq_8b (2x), groq_qwen3 (2x), ...
+- **Error:** [paste last-test-error.txt]
+- **Failed output:** [paste .ralph/last-failed-attempt/ file contents]
+- **Hypothesis:** [what you think went wrong — truncation? wrong nesting? bad model for this type?]
+
+## Patterns noticed
+- [e.g. "8b consistently drops closing fi on multi-branch if statements"]
+- [e.g. "qwen3 rewrites full files instead of targeted edits when the file is >200 lines"]
+- [e.g. "120b always adds a comment block at the top of bash files"]
+
+## Task design issues
+- [e.g. "step had two assertions, one could pass while other failed — should have been split"]
+- [e.g. "-- files: range was too narrow, model couldn't see the surrounding function"]
+
+## Suggested engine changes
+- [concrete ideas: new -- mode: annotation, routing tweak, prompt wording, etc.]
+```
+
+### What to bring back to the Ralph source repo
+
+Open a new session in the Ralph source repo and paste (or attach) the field report. The most actionable items are:
+
+1. **Provider stats JSON** — informs routing decisions (which models to move up/down the chain)
+2. **Failed output + error pairs** — shows exactly what models produce wrong and why
+3. **Patterns** — recurring failure modes that suggest prompt changes, step-splitting rules, or new `-- mode:` annotations
+4. **Task design issues** — improvements to the task-writing guidance in CLAUDE.md
+
+The Ralph source session can then make targeted engine changes and you run `ralph.sh update` in the project to pull them in.
+
+---
+
 ## Key files at a glance
 
 | File | Purpose |
