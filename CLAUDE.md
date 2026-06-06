@@ -44,12 +44,18 @@ Task files live in `tasks/1_queue/` (waiting) or `tasks/2_active/` (in progress)
 # **Parent task:** original-name · **Split depth:** 1
 
 ## Steps
-- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <command that verifies THIS specific change was made, e.g. grep -q 'key-string' file.sh — NOT a repeat of the global test> -- files: path/to/file.sh:start-end, other/file.sh
-- [ ] Step 2: ...
+- [ ] Step 1: <what to do> — done when: <acceptance criterion> -- test: <command that verifies THIS specific change was made, e.g. grep -q 'key-string' file.sh — NOT a repeat of the global test> -- files: path/to/file.sh:start-end, other/file.sh -- mode: aymm
+- [ ] Step 2: ... -- mode: claude
+- [ ] Step 3: ...
 
 ## Smoke test
 <what to manually verify after the loop completes this task>
 ```
+
+**`-- mode:`** (optional, per-step annotation) — controls which executor runs that step. Stripped from the agent's prompt; bash reads it from `last-step.txt`.
+- `aymm` — free provider handles this step (default when absent)
+- `claude` — delegates this one step to `loop.sh` (Claude). Use for edits to existing TypeScript, schema files, or any file free providers reliably corrupt. `aymm-loop.sh` runs one Claude iteration then returns to the AYMM rotation.
+- Omit for most steps; only annotate the ones that need Claude specifically.
 
 **`**Run:**` (optional)** — controls which execution mode is allowed to pick up the task. `loop.sh` and `aymm-loop.sh` both check this field and write STOP with a clear error if the mode doesn't match. Values:
 - `interactive` — Claude directly only; neither `ralph.sh` nor `ralph.sh aymm` will run it
@@ -75,11 +81,19 @@ These habits produce better outcomes, especially with AYMM free providers:
 - **The `-- test:` and `-- files:` annotations are stripped from the agent's prompt** — the agent only sees the human-readable spec and "done when:" description. Bash reads the full `last-step.txt` to run tests and inject files. This prevents agents from gaming test commands (e.g. adding a matching string as a comment) and forces them to implement from the actual requirement.
 - The `-- files:` annotation controls what file content gets injected as read context for this step. Format: `-- files: path1:start-end, path2, path3:50-90`. Use line ranges to inject only the relevant function rather than the whole script — this is the primary tool for keeping free-provider payloads small. If omitted, no files are auto-injected. Always list files explicitly; the old auto-grep approach is gone.
 - Avoid steps that require host-only commands inside the loop (`docker build`, writing outside `/workspace`, network calls to internal services). Mark those tasks `**Run:** interactive` or put the host command in the smoke test instead.
+- **"Create X" on an existing file triggers a full rewrite** — use "Ensure X contains..." or "Add Y to X" when the file may already exist. Providers treat "create" as permission to overwrite.
+- **grep tests verify presence, not correctness** — `grep -q 'functionName' lib.ts` passes even if the function is never called. Add a second assertion checking the call site.
+- **Sequential steps on the same file need cumulative tests** — if steps T3, T4, T5 all edit the same file, T5's test must also assert T3's and T4's additions still exist.
+- **Exact grep strings must match the step description verbatim** — `-- test:` is stripped from the agent prompt. If the test does `grep -q 'exact phrase'`, that phrase must appear literally in the step description or the provider will paraphrase it and fail.
+- **All-Claude tasks should use `Run: ralph`** — routing every step through AYMM adds two iterations per step with zero benefit when there are no free-provider-eligible steps.
 
 **AYMM (free provider) tasks**
 - Always set `**Allowed files:**` for AYMM tasks. Free providers regularly emit file blocks for files they shouldn't touch (test files, unrelated scripts, the task file itself). Scoping to specific files prevents silent corruption.
 - Keep token estimates honest — if the actual output exceeds 2× the estimate the loop stops. Under-estimating wastes a run; over-estimating is fine.
 - Prefer `<edit>` blocks over full `<file>` rewrites in your step descriptions. Full rewrites from free providers frequently truncate or drop functions.
+- **Mark edits to existing TypeScript `-- mode: claude`** — schema files, route handlers, ORM queries, typed indexes. Free providers reliably corrupt these with bad imports, wrong types, or dropped declarations. New self-contained files (utilities, new routes) are safe for AYMM.
+- **Gemini times out on large-context steps** — any step injecting >500 tokens of `-- files:` context is unreliable on Gemini. Keep file ranges tight.
+- **Mistral (codestral) returns prose instead of file blocks on new files >100 lines** — treat it as a last-resort provider for large new-file tasks.
 - **Never `source` a full loop script in a test.** `source loop.sh` or `source aymm-loop.sh` runs the main loop and blocks the container indefinitely. To test functions that live in those scripts, copy them verbatim into `test-engine.sh` (same approach as `get_step_spec` in te-03 and the failure counter functions in te-05). If a function is needed in many tests, consider extracting it to a sourced library file instead.
 
 **Done filenames**
@@ -146,7 +160,7 @@ Branch per task, merge when done, delete the branch:
 ```bash
 git checkout -b task/<name>
 # ... work through steps ...
-git checkout main && git merge --ff-only task/<name> && git branch -d task/<name>
+git checkout main && git merge --ff-only task/<name> && git branch -D task/<name>
 ```
 
 State files (`CHANGELOG.md`, `BLOCKED.md`) commit to main directly. One agent, one task — no branch conflicts possible.
@@ -157,25 +171,32 @@ Consistent doc structure so the loop orients quickly each iteration.
 
 ### Folder structure
 
-- **Project root** holds orientation docs and engine files only:
+- **Project root** holds orientation docs and workspace state:
   - `README.md` — what it is, how to run it
   - `ARCHITECTURE.md` — stack, runtime, key folders, deploy topology, test command (**read-only to the agent**)
+  - `CLAUDE.md` — this file (**read-only to the agent**)
+  - `prompt.md` — step executor prompt; bash injects the current step before passing to Claude
   - `CHANGELOG.md` — append-only log of completed tasks (date, name, one-line description, links)
-  - `ROUTINES.md` — thin index pointing at routines in `routines/`
   - `TEST.md` — post-deploy and recurring verifications
   - `BLOCKED.md` — tasks the loop couldn't progress, with captured evidence
   - `ARCHITECTURE_REVIEW.md` — proposed changes to ARCHITECTURE.md, awaiting human review
-  - `prompt.md` — step executor; bash injects the current step before passing to Claude
-  - `prompt-plan.md` — breakdown mode; generates task files from backlog
-  - `loop.sh` — the loop runner (inside container)
-  - `ralph.sh` — host CLI wrapper
+
+- **`ralph-aymm/`** — engine scripts (read-only inside Docker, mounted at `/engine`):
+  - `ralph.sh` — host CLI wrapper; run as `bash ralph-aymm/ralph.sh [mode]`
+  - `loop.sh` — Claude execution loop (runs inside container)
+  - `aymm-loop.sh` — multi-provider orchestrator (runs inside container)
+  - `run_agent_task.sh` — per-provider task runner
+  - `apply_changes.sh` — XML response parser and file writer
+  - `provider-config.sh` — provider list and per-provider config
+  - `Dockerfile` + `init-firewall.sh` — container definition
 
 - **`tasks/0_backlog/`** — area plans and ideas not yet broken into task files
 - **`tasks/1_queue/`** — task files waiting to be picked up by the loop
 - **`tasks/2_active/`** — the single task currently being worked (bash moves it here)
-- **`tasks/3_done/`** — archived completed tasks
-- **`routines/`** — recurring operational processes (e.g. data syncs, release steps).
-- **`reference/`** — background research and external context.
+- **`tasks/3_done/`** — archived completed tasks (date-prefixed: `YYYY-MM-DD-<name>.md`)
+- **`planning/`** — blueprints, phase plans, style guides
+- **`handoffs/`** — archived HANDOFF.md files from past sessions
+- **`reference/`** — background research and external context
 - **`_archive/`** — superseded docs kept for reference
 
 ### Task pipeline
@@ -304,10 +325,13 @@ Loop mode runs with `--dangerously-skip-permissions`. This is safe because Claud
 
 ```bash
 export NTFY_TOPIC=ralph-<name>-<random>   # add to shell profile
-bash ralph.sh          # execution mode (default)
-bash ralph.sh plan     # breakdown mode — generates task files from plans
-touch STOP             # stop from any terminal
+bash ralph-aymm/ralph.sh          # Claude-only execution mode
+bash ralph-aymm/ralph.sh aymm     # AYMM multi-provider mode (free providers + Claude fallback)
+bash ralph-aymm/ralph.sh aymm --only  # free providers only, no Claude fallback
+bash ralph-aymm/ralph.sh stats    # show free provider pass/fail rates
+touch STOP                        # stop from any terminal
 tail -f .ralph/loop.log
+echo '{}' > .ralph/aymm-failure-counters.json  # reset failure counters before retry
 ```
 
 ### Firewall allowlist
