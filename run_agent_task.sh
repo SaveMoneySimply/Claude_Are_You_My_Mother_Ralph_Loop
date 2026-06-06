@@ -513,6 +513,19 @@ main() {
     # Run test — roll back any provider changes on failure
     run_test_command || {
         echo "Test failed — rolling back provider changes" >&2
+        # Capture failed attempt before rollback for director triage / manual inspection
+        local attempt_dir="${PROJECT_ROOT}/.ralph/last-failed-attempt"
+        rm -rf "$attempt_dir"
+        mkdir -p "$attempt_dir"
+        if [[ -n "$modified_files" ]]; then
+            while IFS= read -r f; do
+                [[ -z "$f" ]] && continue
+                local dest_dir="$attempt_dir/$(dirname "$f")"
+                mkdir -p "$dest_dir"
+                cp "${PROJECT_ROOT}/$f" "$attempt_dir/$f" 2>/dev/null || true
+            done <<< "$modified_files"
+        fi
+        cp "${PROJECT_ROOT}/.ralph/last-test-error.txt" "$attempt_dir/test-error.txt" 2>/dev/null || true
         # Restore task file from snapshot (git excludes tasks/ from rollback)
         if [[ -n "$task_file_backup" && -f "$task_file_backup" ]]; then
             cp "$task_file_backup" "$task_file"
