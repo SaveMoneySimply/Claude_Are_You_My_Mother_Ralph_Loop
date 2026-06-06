@@ -3,7 +3,10 @@
     "allow": [
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Read(//home/matt/Documents/Matt/Code/Simply_Curious/iamsimplycuriousdotcom/ralph-aymm/**)",
+      "Read(//home/matt/Documents/Matt/Code/Simply_Curious/iamsimplycuriousdotcom/**)",
+      "Read(//home/matt/**)"
     ]
   }
 }
