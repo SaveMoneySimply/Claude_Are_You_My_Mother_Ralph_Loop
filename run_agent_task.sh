@@ -6,6 +6,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When engine is mounted at /engine and project at /workspace, detect correctly
+if [[ -d "/workspace/tasks" ]]; then
+    PROJECT_ROOT="/workspace"
+elif [ -d "$(dirname "$SCRIPT_DIR")/tasks" ]; then
+    PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+else
+    PROJECT_ROOT="$SCRIPT_DIR"
+fi
 
 # ---------------------------------------------------------------------------
 # Parse arguments
@@ -59,7 +67,7 @@ API_FORMAT="$(provider_api_format "$PROVIDER")"
 # ---------------------------------------------------------------------------
 
 bundle_context() {
-    local last_task_file="${SCRIPT_DIR}/.ralph/last-task.txt"
+    local last_task_file="${PROJECT_ROOT}/.ralph/last-task.txt"
     if [[ ! -f "$last_task_file" ]]; then
         echo "Error: .ralph/last-task.txt not found" >&2
         return 1
@@ -67,7 +75,7 @@ bundle_context() {
 
     local task_name
     task_name="$(cat "$last_task_file")"
-    local task_file="${SCRIPT_DIR}/tasks/2_active/${task_name}.md"
+    local task_file="${PROJECT_ROOT}/tasks/2_active/${task_name}.md"
 
     if [[ ! -f "$task_file" ]]; then
         echo "Error: task file not found: $task_file" >&2
@@ -77,7 +85,7 @@ bundle_context() {
     # Find next unchecked step
     local next_step
     next_step="$(grep -m1 -- '^\- \[ \]' "$task_file" || true)"
-    printf '%s\n' "$next_step" > "${SCRIPT_DIR}/.ralph/last-step.txt"
+    printf '%s\n' "$next_step" > "${PROJECT_ROOT}/.ralph/last-step.txt"
     if [[ -z "$next_step" ]]; then
         echo "Error: no unchecked steps found in $task_file" >&2
         return 1
@@ -93,8 +101,8 @@ bundle_context() {
 
     # Project overview from ARCHITECTURE.md (everything before ## Directory Structure)
     local arch_overview=""
-    if [[ -f "${SCRIPT_DIR}/ARCHITECTURE.md" ]]; then
-        arch_overview="$(awk '/^## Directory/{exit} {print}' "${SCRIPT_DIR}/ARCHITECTURE.md")"
+    if [[ -f "${PROJECT_ROOT}/ARCHITECTURE.md" ]]; then
+        arch_overview="$(awk '/^## Directory/{exit} {print}' "${PROJECT_ROOT}/ARCHITECTURE.md")"
     fi
 
     # Phase tasks — all tasks across all four directories with the same phase prefix
@@ -105,8 +113,8 @@ bundle_context() {
             [[ -f "$f" ]] || continue
             phase_tasks+="### $(basename "$f")"$'\n'
             phase_tasks+="$(cat "$f")"$'\n\n'
-        done < <(find "${SCRIPT_DIR}/tasks/0_backlog" "${SCRIPT_DIR}/tasks/1_queue" \
-                      "${SCRIPT_DIR}/tasks/2_active" "${SCRIPT_DIR}/tasks/3_done" \
+        done < <(find "${PROJECT_ROOT}/tasks/0_backlog" "${PROJECT_ROOT}/tasks/1_queue" \
+                      "${PROJECT_ROOT}/tasks/2_active" "${PROJECT_ROOT}/tasks/3_done" \
                       -name "${phase}-*.md" 2>/dev/null | sort)
     fi
 
@@ -114,7 +122,7 @@ bundle_context() {
     local prev_review=""
     local phase_num="${phase#phase}"
     if [[ "$phase_num" =~ ^[0-9]+$ ]] && (( phase_num > 1 )); then
-        local prev_file="${SCRIPT_DIR}/handoffs/phase$(( phase_num - 1 ))-review.md"
+        local prev_file="${PROJECT_ROOT}/handoffs/phase$(( phase_num - 1 ))-review.md"
         [[ -f "$prev_file" ]] && prev_review="$(cat "$prev_file")"
     fi
 
@@ -147,7 +155,7 @@ bundle_context() {
 
     # Immediate feedback from the last failed attempt — injected right after the step
     # so the model sees what broke before reading anything else
-    local error_file="${SCRIPT_DIR}/.ralph/last-test-error.txt"
+    local error_file="${PROJECT_ROOT}/.ralph/last-test-error.txt"
     if [[ -f "$error_file" ]]; then
         local error_content
         error_content="$(head -100 "$error_file")"
@@ -164,7 +172,7 @@ bundle_context() {
     prompt="${prompt}</context>"$'\n\n'
 
     # Failure history for this task — provider and error only (no code) to keep payload small
-    local test_log="${SCRIPT_DIR}/.ralph/test-log.jsonl"
+    local test_log="${PROJECT_ROOT}/.ralph/test-log.jsonl"
     if [[ -f "$test_log" ]]; then
         local failure_history
         failure_history="$(jq -r --arg t "$task_name" \
@@ -180,7 +188,7 @@ bundle_context() {
 
     # Inject files listed in the step's -- files: annotation (format: path or path:start-end)
     local step_files_spec
-    step_files_spec="$(grep -oP '(?<=-- files: ).*$' "${SCRIPT_DIR}/.ralph/last-step.txt" 2>/dev/null | tr -d '\r\n' || true)"
+    step_files_spec="$(grep -oP '(?<=-- files: ).*$' "${PROJECT_ROOT}/.ralph/last-step.txt" 2>/dev/null | tr -d '\r\n' || true)"
     if [[ -n "$step_files_spec" ]]; then
         IFS=',' read -ra file_specs <<< "$step_files_spec"
         for spec in "${file_specs[@]}"; do
@@ -194,7 +202,7 @@ bundle_context() {
                 fpath="$spec"
                 frange=""
             fi
-            local full_path="${SCRIPT_DIR}/${fpath}"
+            local full_path="${PROJECT_ROOT}/${fpath}"
             if [[ -f "$full_path" ]]; then
                 prompt="${prompt}<context name=\"file:${fpath}\">"$'\n'
                 if [[ -n "$frange" ]]; then
@@ -238,7 +246,7 @@ handle_http_status() {
     local response_body_file="$2"
 
     if [[ "$status" -ne 200 ]]; then
-        mkdir -p "${SCRIPT_DIR}/.ralph"
+        mkdir -p "${PROJECT_ROOT}/.ralph"
 
         local response_body=""
         if [[ -f "$response_body_file" ]]; then
@@ -252,7 +260,7 @@ handle_http_status() {
             --arg status_code "$status" \
             --arg body "$response_body" \
             '{timestamp:($ts | tonumber), provider:$provider, http_status_code:($status_code | tonumber), response_body:$body}')"
-        printf '%s\n' "$log_entry" >> "${SCRIPT_DIR}/.ralph/http-error-log.jsonl"
+        printf '%s\n' "$log_entry" >> "${PROJECT_ROOT}/.ralph/http-error-log.jsonl"
     fi
 
     case "$status" in
@@ -357,15 +365,15 @@ parse_and_apply_response() {
     tmp_text="$(mktemp /tmp/aymm-text-XXXXXX.txt)"
     printf '%s' "$text_content" > "$tmp_text"
     # Persist for test log — run_test_command() reads this to record what was tried
-    printf '%s' "$text_content" > "${SCRIPT_DIR}/.ralph/last-response.txt"
+    printf '%s' "$text_content" > "${PROJECT_ROOT}/.ralph/last-response.txt"
     local allowlist=""
     local last_task_name
-    last_task_name="$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null || echo "")"
-    local at_file="${SCRIPT_DIR}/tasks/2_active/${last_task_name}.md"
+    last_task_name="$(cat "${PROJECT_ROOT}/.ralph/last-task.txt" 2>/dev/null || echo "")"
+    local at_file="${PROJECT_ROOT}/tasks/2_active/${last_task_name}.md"
     if [[ -n "$last_task_name" && -f "$at_file" ]]; then
         allowlist="$(grep -oP '(?<=\*\*Allowed files:\*\* ).*' "$at_file" | head -1 || true)"
     fi
-    bash "${SCRIPT_DIR}/apply_changes.sh" "$tmp_text" "$SCRIPT_DIR" "$allowlist"
+    bash "${SCRIPT_DIR}/apply_changes.sh" "$tmp_text" "$PROJECT_ROOT" "$allowlist"
     local rc=$?
     rm -f "$tmp_text"
     return $rc
@@ -376,7 +384,7 @@ parse_and_apply_response() {
 # ---------------------------------------------------------------------------
 
 run_test_command() {
-    local arch_file="${SCRIPT_DIR}/ARCHITECTURE.md"
+    local arch_file="${PROJECT_ROOT}/ARCHITECTURE.md"
     if [[ ! -f "$arch_file" ]]; then
         echo "Error: ARCHITECTURE.md not found" >&2
         return 2
@@ -385,8 +393,8 @@ run_test_command() {
     # Extract test command: task file first, fall back to ARCHITECTURE.md
     local test_cmd=""
     local task_name
-    task_name="$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null || echo "")"
-    local task_file="${SCRIPT_DIR}/tasks/2_active/${task_name}.md"
+    task_name="$(cat "${PROJECT_ROOT}/.ralph/last-task.txt" 2>/dev/null || echo "")"
+    local task_file="${PROJECT_ROOT}/tasks/2_active/${task_name}.md"
     if [[ -n "$task_name" && -f "$task_file" ]]; then
         test_cmd="$(grep -oP '(?<=\*\*Test command:\*\* ).*' "$task_file" | head -1 || true)"
     fi
@@ -399,15 +407,15 @@ run_test_command() {
         return 2
     fi
 
-    local error_log="${SCRIPT_DIR}/.ralph/last-test-error.txt"
-    local test_log="${SCRIPT_DIR}/.ralph/test-log.jsonl"
+    local error_log="${PROJECT_ROOT}/.ralph/last-test-error.txt"
+    local test_log="${PROJECT_ROOT}/.ralph/test-log.jsonl"
     local outcome output
 
     echo "Running test: $test_cmd"
     if output="$(eval "$test_cmd" 2>&1)"; then
         # Run per-step test if present (-- test: <cmd> at end of step text)
         local step_test step_output
-        step_test="$(grep -oP '(?<=-- test: ).*' "${SCRIPT_DIR}/.ralph/last-step.txt" 2>/dev/null | sed 's/[[:space:]]*-- files:.*$//' || true)"
+        step_test="$(grep -oP '(?<=-- test: ).*' "${PROJECT_ROOT}/.ralph/last-step.txt" 2>/dev/null | sed 's/[[:space:]]*-- files:.*$//' || true)"
         if [[ -n "$step_test" ]]; then
             echo "Running step test: $step_test"
             if step_output="$(eval "$step_test" 2>&1)"; then
@@ -431,12 +439,12 @@ run_test_command() {
     fi
 
     local response
-    response="$(cat "${SCRIPT_DIR}/.ralph/last-response.txt" 2>/dev/null || echo "")"
+    response="$(cat "${PROJECT_ROOT}/.ralph/last-response.txt" 2>/dev/null || echo "")"
 
     local log_entry
     log_entry="$(jq -n \
         --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        --arg task "$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null || true)" \
+        --arg task "$(cat "${PROJECT_ROOT}/.ralph/last-task.txt" 2>/dev/null || true)" \
         --arg provider "${PROVIDER}" \
         --arg outcome "$outcome" \
         --arg output "$output" \
@@ -483,8 +491,8 @@ main() {
     # tasks/ (to preserve the 1_queue→2_active move), so we restore it manually.
     local task_file_backup=""
     local task_snap_name
-    task_snap_name="$(cat "${SCRIPT_DIR}/.ralph/last-task.txt" 2>/dev/null || true)"
-    local task_file="${SCRIPT_DIR}/tasks/2_active/${task_snap_name}.md"
+    task_snap_name="$(cat "${PROJECT_ROOT}/.ralph/last-task.txt" 2>/dev/null || true)"
+    local task_file="${PROJECT_ROOT}/tasks/2_active/${task_snap_name}.md"
     if [[ -n "$task_snap_name" && -f "$task_file" ]]; then
         task_file_backup="$(mktemp /tmp/aymm-task-backup-XXXXXX.md)"
         cp "$task_file" "$task_file_backup"
@@ -497,9 +505,9 @@ main() {
     # Exclude tasks/ — the task mv (1_queue → 2_active) happened before this script
     # was called and must not be reverted, or the loop re-queues the task every iteration.
     local modified_files new_files
-    modified_files=$(git -C "$SCRIPT_DIR" diff --name-only 2>/dev/null \
+    modified_files=$(git -C "$PROJECT_ROOT" diff --name-only 2>/dev/null \
         | grep -v '^tasks/' || true)
-    new_files=$(git -C "$SCRIPT_DIR" ls-files --others --exclude-standard 2>/dev/null \
+    new_files=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null \
         | grep -v '^\.ralph/' | grep -v '^tasks/' || true)
 
     # Run test — roll back any provider changes on failure
@@ -511,10 +519,10 @@ main() {
         fi
         if [[ -n "$modified_files" ]]; then
             # shellcheck disable=SC2086
-            git -C "$SCRIPT_DIR" checkout HEAD -- $modified_files 2>/dev/null || true
+            git -C "$PROJECT_ROOT" checkout HEAD -- $modified_files 2>/dev/null || true
         fi
         if [[ -n "$new_files" ]]; then
-            echo "$new_files" | xargs -I{} rm -f "${SCRIPT_DIR}/{}" 2>/dev/null || true
+            echo "$new_files" | xargs -I{} rm -f "${PROJECT_ROOT}/{}" 2>/dev/null || true
         fi
         rm -f "$task_file_backup"
         exit 2

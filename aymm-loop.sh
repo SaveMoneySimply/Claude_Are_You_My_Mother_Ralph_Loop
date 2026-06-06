@@ -3,9 +3,21 @@
 # Runs inside the container. Iterates free providers before falling back to Claude.
 set -uo pipefail
 
-WORKDIR=/workspace
+WORKDIR="$(cd "$(dirname "$0")/.." && pwd)"
+# When engine is mounted separately in Docker (e.g. /engine), fall back to /workspace
+if [[ "$WORKDIR" == "/" ]] && [[ -d "/workspace" ]]; then
+    WORKDIR="/workspace"
+fi
 cd "$WORKDIR"
 mkdir -p .ralph tasks/2_active tasks/3_done
+# Engine scripts may be in a separate directory (Docker with engine mounted at /engine)
+if [[ -d "/engine" ]]; then
+    ENGINEDIR="/engine"
+elif [[ -d "${WORKDIR}/ralph-aymm" ]]; then
+    ENGINEDIR="${WORKDIR}/ralph-aymm"
+else
+    ENGINEDIR="$WORKDIR"
+fi
 rm -f "${WORKDIR}/STOP"
 echo "aymm-loop.sh started, STOP cleared"
 
@@ -14,7 +26,7 @@ echo "aymm-loop.sh started, STOP cleared"
 # ---------------------------------------------------------------------------
 
 # shellcheck source=provider-config.sh
-source "${WORKDIR}/provider-config.sh"
+source "${ENGINEDIR}/provider-config.sh"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,6 +43,17 @@ read_run_mode() {
     local task_file="$1" val
     val=$(grep -oiP '\bRun:(?:\*\*\s*|\s+)\K\w+' "$task_file" 2>/dev/null \
         | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "${val:-any}"
+}
+
+# Read the per-step `-- mode:` annotation from the first unchecked step of a task file.
+# Returns 'claude', 'aymm', or 'any' (default when absent). This lets a single task mix
+# free-provider steps (new files) with Claude-only steps (edits to existing TypeScript),
+# avoiding the file-corruption failure mode documented in ralph-engine-feedback.md.
+read_step_mode() {
+    local task_file="$1" step val
+    step=$(grep -m1 -- '^- \[ \]' "$task_file" 2>/dev/null)
+    val=$(printf '%s' "$step" | grep -oiP -- '-- mode:\s*\K[a-z]+' | head -1 | tr '[:upper:]' '[:lower:]')
     echo "${val:-any}"
 }
 
@@ -261,7 +284,7 @@ close_task() {
     branch_exists="$(git branch --list "task/${task}")"
     if [[ -n "$branch_exists" ]]; then
         git checkout main 2>/dev/null || true
-        git merge --ff-only "task/${task}" && git branch -d "task/${task}" || true
+        git merge --ff-only "task/${task}" && git branch -D "task/${task}" || true
     fi
 
     mv "$task_file" "$done_file"
@@ -343,7 +366,7 @@ while [[ ! -f STOP ]]; do
                 break
             fi
             echo "No tasks in queue — delegating to loop.sh"
-            bash "${WORKDIR}/loop.sh"
+            bash "${ENGINEDIR}/loop.sh"
             break
         fi
     fi
@@ -401,7 +424,7 @@ while [[ ! -f STOP ]]; do
             fi
         fi
 
-        SINGLE_TASK=1 bash "${WORKDIR}/loop.sh"
+        SINGLE_TASK=1 bash "${ENGINEDIR}/loop.sh"
 
         # Clean up escalation context file after Claude returns
         rm -f "${ESCALATION_CONTEXT_FILE}"
@@ -414,7 +437,7 @@ while [[ ! -f STOP ]]; do
             post_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
             if [[ "$post_branch" == "task/${CURRENT_TASK}" ]]; then
                 git checkout main
-                git merge --ff-only "task/${CURRENT_TASK}" && git branch -d "task/${CURRENT_TASK}" || true
+                git merge --ff-only "task/${CURRENT_TASK}" && git branch -D "task/${CURRENT_TASK}" || true
             fi
             if [[ -f "$task_active_file" ]]; then
                 close_task "$CURRENT_TASK" "claude-escalation"
@@ -433,13 +456,52 @@ while [[ ! -f STOP ]]; do
         fi
     fi
 
+    # ── Per-step mode: delegate `-- mode: claude` steps to Claude ─────────────
+    # Some steps within an aymm task edit existing TypeScript (schema, routes, index)
+    # which free providers reliably corrupt. Marking those steps `-- mode: claude`
+    # routes just that step through loop.sh (Claude, one iteration) while the rest of
+    # the task still runs on free providers. See ralph-engine-feedback.md ENH-001.
+    STEP_MODE="$(read_step_mode "tasks/2_active/${CURRENT_TASK}.md")"
+    if [[ "$STEP_MODE" == "claude" ]]; then
+        if [[ "${AYMM_ONLY:-}" == "1" ]]; then
+            echo "Step is mode:claude but AYMM_ONLY=1 — cannot delegate to Claude. Stopping." > STOP
+            break
+        fi
+        echo "Step marked mode:claude — delegating one step to loop.sh (Claude)"
+        SINGLE_STEP=1 SINGLE_TASK=1 bash "${ENGINEDIR}/loop.sh"
+        # loop.sh marks the step done, commits, and closes the task if it was the last
+        # step. If the task file is gone or has no unchecked steps, run close cleanup.
+        if [[ ! -f "tasks/2_active/${CURRENT_TASK}.md" ]] || ! grep -q '^- \[ \]' "tasks/2_active/${CURRENT_TASK}.md" 2>/dev/null; then
+            post_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+            if [[ "$post_branch" == "task/${CURRENT_TASK}" ]]; then
+                git checkout main 2>/dev/null && git merge --ff-only "task/${CURRENT_TASK}" && git branch -D "task/${CURRENT_TASK}" || true
+            fi
+        fi
+        PROVIDER_INDEX=0
+        RATE_LIMIT_ADVANCES=0
+        continue
+    fi
+
+    # ── BUG-020 fix: if no unchecked steps remain, close via loop.sh directly ──
+    # Without this, run_agent_task.sh exits 1 ("no unchecked steps"), exhausts all
+    # providers, and triggers a STOP via the escalation path. Delegating directly
+    # to loop.sh (SINGLE_TASK=1, no SINGLE_STEP) runs the global test and closes
+    # the task cleanly. This handles all-claude-mode tasks and the end of mixed tasks.
+    if ! has_remaining_steps "$CURRENT_TASK"; then
+        echo "No unchecked steps remain — delegating task close to loop.sh"
+        SINGLE_TASK=1 bash "${ENGINEDIR}/loop.sh"
+        PROVIDER_INDEX=0
+        RATE_LIMIT_ADVANCES=0
+        continue
+    fi
+
     # ── Inner execution loop ─────────────────────────────────────────────────
     echo "Running provider: ${CURRENT_PROVIDER} | Task: ${CURRENT_TASK}"
 
     TASKS_ATTEMPTED["$CURRENT_PROVIDER"]=$(( ${TASKS_ATTEMPTED["$CURRENT_PROVIDER"]:-0} + 1 ))
 
     exit_code=0
-    bash "${WORKDIR}/run_agent_task.sh" --provider="${CURRENT_PROVIDER}" || exit_code=$?
+    bash "${ENGINEDIR}/run_agent_task.sh" --provider="${CURRENT_PROVIDER}" || exit_code=$?
 
     # ── Handle exit code ─────────────────────────────────────────────────────
     case "$exit_code" in

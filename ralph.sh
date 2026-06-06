@@ -29,6 +29,9 @@ apply_sed_inplace() {
 # ─── Core Docker Functions ──────────────────────────────────────────────────
 
 _docker_build() {
+    if docker image inspect ralph-aymm-agent > /dev/null 2>&1; then
+        return 0  # Image exists, skip build
+    fi
     echo "Building Docker image..."
     docker build -t ralph-aymm-agent "$SCRIPT_DIR"
 }
@@ -39,15 +42,19 @@ _docker_run_ralph() {
     local args="$@" # Remaining arguments passed to the loop script
     echo "Running Ralph in Docker with $loop_script..."
     docker run --rm \
+        --cap-add=NET_ADMIN \
+        --cap-add=NET_RAW \
         -v "$(pwd):/workspace" \
-        -v "$SCRIPT_DIR/ralph-aymm:/engine:ro" \
+        -v "$SCRIPT_DIR:/engine:ro" \
+        -v "$HOME/.claude:/home/claude/.claude:ro" \
+        -v "$HOME/.gitconfig:/home/claude/.gitconfig:ro" \
         -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
         -e OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
         -e MISTRAL_API_KEY="${MISTRAL_API_KEY:-}" \
         -e GROQ_API_KEY="${GROQ_API_KEY:-}" \
         -e GEMINI_API_KEY="${GEMINI_API_KEY:-}" \
         -e OLLAMA_HOST="${OLLAMA_HOST:-}" \
-        -it ralph-aymm-agent \
+        ralph-aymm-agent \
         bash "/engine/$loop_script" $args
 }
 
@@ -97,23 +104,6 @@ ralph_init() {
     cp "$SCRIPT_DIR/ralph.sh" "ralph-aymm/ralph.sh"
     # Patch the comment block to indicate this is the ralph-aymm subdirectory version
     apply_sed_inplace "ralph-aymm/ralph.sh" -e '1,8s|bash ralph.sh|bash ralph-aymm/ralph.sh|'
-
-    echo "  Applying patch 1 (WORKDIR in loop.sh, aymm-loop.sh)..."
-    apply_sed_inplace "ralph-aymm/loop.sh" -e 's|WORKDIR=/workspace|WORKDIR="$(cd "$(dirname "$0")/.." \&\& pwd)"|'
-    apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|WORKDIR=/workspace|WORKDIR="$(cd "$(dirname "$0")/.." \&\& pwd)"|'
-
-    echo "  Applying patch 2 (PROJECT_ROOT in run_agent_task.sh)..."
-    local RUN_AGENT_TASK_PATH="ralph-aymm/run_agent_task.sh"
-    # Insert PROJECT_ROOT detection after SCRIPT_DIR assignment
-    apply_sed_inplace "$RUN_AGENT_TASK_PATH" -e '/^SCRIPT_DIR/a\
-[ -d "$(dirname "$SCRIPT_DIR")/tasks" ] \\\
-  \&\& PROJECT_ROOT="$(dirname "$SCRIPT_DIR")" \\\
-  \|\| PROJECT_ROOT="$SCRIPT_DIR"'
-    # Replace SCRIPT_DIR references with PROJECT_ROOT for specific paths
-    apply_sed_inplace "$RUN_AGENT_TASK_PATH" -E 's:\$\{SCRIPT_DIR\}(/\.ralph/|/tasks/|/ARCHITECTURE\.md):\$\{PROJECT_ROOT\}\1:g'
-
-    echo "  Applying patch 3 (run_agent_task.sh path in aymm-loop.sh)..."
-    apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|bash "${WORKDIR}/run_agent_task.sh"|bash "${WORKDIR}/ralph-aymm/run_agent_task.sh"|'
 
     echo "  Writing ARCHITECTURE.md..."
     cat << 'EOF' > ARCHITECTURE.md
@@ -237,21 +227,6 @@ ralph_update() {
     cp "$RALPH_SOURCE_REPO/ralph.sh" "ralph-aymm/ralph.sh"
     apply_sed_inplace "ralph-aymm/ralph.sh" -e '1,8s|bash ralph.sh|bash ralph-aymm/ralph.sh|'
 
-    echo "  Re-applying patch 1 (WORKDIR in loop.sh, aymm-loop.sh)..."
-    apply_sed_inplace "ralph-aymm/loop.sh" -e 's|WORKDIR=/workspace|WORKDIR="$(cd "$(dirname "$0")/.." \&\& pwd)"|'
-    apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|WORKDIR=/workspace|WORKDIR="$(cd "$(dirname "$0")/.." \&\& pwd)"|'
-
-    echo "  Re-applying patch 2 (PROJECT_ROOT in run_agent_task.sh)..."
-    local RUN_AGENT_TASK_PATH="ralph-aymm/run_agent_task.sh"
-    apply_sed_inplace "$RUN_AGENT_TASK_PATH" -e '/^SCRIPT_DIR/a\
-[ -d "$(dirname "$SCRIPT_DIR")/tasks" ] \\\
-  \&\& PROJECT_ROOT="$(dirname "$SCRIPT_DIR")" \\\
-  \|\| PROJECT_ROOT="$SCRIPT_DIR"'
-    apply_sed_inplace "$RUN_AGENT_TASK_PATH" -E 's:\$\{SCRIPT_DIR\}(/\.ralph/|/tasks/|/ARCHITECTURE\.md):\$\{PROJECT_ROOT\}\1:g'
-
-    echo "  Re-applying patch 3 (run_agent_task.sh path in aymm-loop.sh)..."
-    apply_sed_inplace "ralph-aymm/aymm-loop.sh" -e 's|bash "${WORKDIR}/run_agent_task.sh"|bash "${WORKDIR}/ralph-aymm/run_agent_task.sh"|'
-
     echo "  Committing updates..."
     git add ralph-aymm/
     git commit -m "update: ralph-aymm engine scripts"
@@ -276,8 +251,8 @@ case "$MODE" in
         ;;
     aymm)
         _docker_build
-        local aymm_args=""
-        if [[ "$1" == "--only" ]]; then
+        aymm_args=""
+        if [[ "${1:-}" == "--only" ]]; then
             aymm_args="--only"
             shift # Consume --only so that subsequent "$@" is correct
         fi

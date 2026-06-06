@@ -3,7 +3,11 @@
 # Iterates: pick next step → run claude → check result → escalate on failure → repeat.
 set -uo pipefail
 
-WORKDIR=/workspace
+WORKDIR="$(cd "$(dirname "$0")/.." && pwd)"
+# When engine is mounted separately in Docker (e.g. /engine), fall back to /workspace
+if [[ "$WORKDIR" == "/" ]] && [[ -d "/workspace" ]]; then
+    WORKDIR="/workspace"
+fi
 cd "$WORKDIR"
 mkdir -p .ralph tasks/{0_backlog,1_queue,2_active,3_done}
 rm -f "${WORKDIR}/STOP"
@@ -268,7 +272,8 @@ while [ ! -f STOP ]; do
     TASK_FILE="tasks/2_active/${CURRENT_TASK}.md"
 
     RUN_MODE=$(read_run_mode "$TASK_FILE")
-    if [ "$RUN_MODE" = "interactive" ] || [ "$RUN_MODE" = "aymm" ]; then
+    # In escalation mode (SINGLE_TASK=1), only block interactive tasks — aymm tasks can be run by Claude as fallback
+    if [ "$RUN_MODE" = "interactive" ] || { [ "$RUN_MODE" = "aymm" ] && [ "${SINGLE_TASK:-0}" != "1" ]; }; then
         echo "Task ${CURRENT_TASK} is marked run:${RUN_MODE} — cannot run via ralph.sh. Use Claude directly or bash ralph.sh aymm." > STOP
         break
     fi
@@ -353,7 +358,6 @@ while [ ! -f STOP ]; do
     # ─── read result written by agent ────────────────────────────────────
     # Agent writes "pass" or "fail" to .ralph/last-result.txt each iteration
 
-    local _res
     _res=$(cat .ralph/last-result.txt 2>/dev/null | tr '[:upper:]' '[:lower:]')
     RESULT="${_res:-unknown}"
     rm -f .ralph/last-result.txt  # consume it
@@ -437,6 +441,13 @@ while [ ! -f STOP ]; do
             echo "Budget exceeded — stopping (autonomy: $AUTONOMY)" > STOP
             log_recovery "$CURRENT_TASK" "budget_exceeded" "stop" "blocked" "$TOTAL_TOKENS"
         fi
+    fi
+
+    # SINGLE_STEP mode: aymm-loop delegated exactly one `-- mode: claude` step to
+    # Claude. Execute one iteration then return control so the AYMM provider loop
+    # can resume on the next (possibly aymm-mode) step.
+    if [ "${SINGLE_STEP:-0}" = "1" ]; then
+        break
     fi
 
     [ -f STOP ] || sleep 2

@@ -9,7 +9,7 @@ ENV GROQ_API_KEY=""
 ENV MISTRAL_API_KEY=""
 ENV OPENROUTER_API_KEY=""
 
-# System packages: Node 20 setup prereqs + runtime tools
+# System packages: Node 22 setup prereqs + runtime tools
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
@@ -20,8 +20,8 @@ RUN apt-get update && apt-get install -y \
     ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
-# Node 20 via NodeSource
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+# Node 22 via NodeSource
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 

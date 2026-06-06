@@ -75,6 +75,11 @@ if [ "$WORKSPACE_UID" -gt 0 ] && [ "$(id -u claude)" != "$WORKSPACE_UID" ]; then
     chown -R claude /home/claude
 fi
 
-LOOP="${LOOP_SCRIPT:-loop.sh}"
+# Use CMD args passed by docker run if present; otherwise fall back to LOOP_SCRIPT or loop.sh
+if [[ $# -gt 0 ]]; then
+    EXEC_CMD="$*"
+else
+    EXEC_CMD="bash /workspace/${LOOP_SCRIPT:-loop.sh}"
+fi
 exec su -s /bin/bash claude -c \
-    "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && bash /workspace/${LOOP:-loop.sh}"
+    "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && ${EXEC_CMD}"
