@@ -342,7 +342,9 @@ close_task() {
     local branch_exists
     branch_exists="$(git branch --list "task/${task}")"
     if [[ -n "$branch_exists" ]]; then
-        git checkout main 2>/dev/null || true
+        local default_branch
+        default_branch="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || git branch --format='%(refname:short)' | grep -E '^(main|master)$' | head -1 || echo 'main')"
+        git checkout "$default_branch" 2>/dev/null || true
         git merge --ff-only "task/${task}" && git branch -D "task/${task}" || true
     fi
 
@@ -398,6 +400,8 @@ init_failure_counters
 # ---------------------------------------------------------------------------
 
 i=0
+
+DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || git branch --format='%(refname:short)' | grep -E '^(main|master)$' | head -1 || echo 'main')"
 
 while [[ ! -f STOP ]]; do
     i=$(( i + 1 ))
@@ -509,7 +513,7 @@ while [[ ! -f STOP ]]; do
         if [[ ! -f "$task_active_file" ]] || ! grep -q '^- \[ \]' "$task_active_file" 2>/dev/null; then
             post_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
             if [[ "$post_branch" == "task/${CURRENT_TASK}" ]]; then
-                git checkout main
+                git checkout "$DEFAULT_BRANCH"
                 git merge --ff-only "task/${CURRENT_TASK}" && git branch -D "task/${CURRENT_TASK}" || true
             fi
             if [[ -f "$task_active_file" ]]; then
@@ -517,10 +521,13 @@ while [[ ! -f STOP ]]; do
             fi
             continue
         fi
+        # Claude returned with steps still remaining — restart the iteration so
+        # CURRENT_PROVIDER is re-evaluated with the reset PROVIDER_INDEX.
+        continue
     fi
 
     # ── Ensure task branch exists ────────────────────────────────────────────
-    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")"
+    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
     if [[ "$current_branch" != "task/${CURRENT_TASK}" ]]; then
         if ! git show-ref --quiet "refs/heads/task/${CURRENT_TASK}"; then
             git checkout -b "task/${CURRENT_TASK}"
@@ -542,12 +549,17 @@ while [[ ! -f STOP ]]; do
         fi
         echo "Step marked mode:claude — delegating one step to loop.sh (Claude)"
         SINGLE_STEP=1 SINGLE_TASK=1 bash "${ENGINEDIR}/loop.sh"
-        # loop.sh marks the step done, commits, and closes the task if it was the last
-        # step. If the task file is gone or has no unchecked steps, run close cleanup.
+        # loop.sh commits inside Claude's Bash tool. If EROFS hit, changes are written
+        # but uncommitted. Catch that here from the aymm-loop context (native bash, no EROFS).
+        if ! git diff --cached --quiet 2>/dev/null || ! git diff --quiet -- src/ tasks/ 2>/dev/null; then
+            git add -A
+            git commit -m "${CURRENT_TASK}: step via claude (deferred commit)" 2>/dev/null || true
+        fi
+        # If the task file is gone or has no unchecked steps, run close cleanup.
         if [[ ! -f "tasks/2_active/${CURRENT_TASK}.md" ]] || ! grep -q '^- \[ \]' "tasks/2_active/${CURRENT_TASK}.md" 2>/dev/null; then
             post_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
             if [[ "$post_branch" == "task/${CURRENT_TASK}" ]]; then
-                git checkout main 2>/dev/null && git merge --ff-only "task/${CURRENT_TASK}" && git branch -D "task/${CURRENT_TASK}" || true
+                git checkout "$DEFAULT_BRANCH" 2>/dev/null && git merge --ff-only "task/${CURRENT_TASK}" && git branch -D "task/${CURRENT_TASK}" || true
             fi
         fi
         PROVIDER_INDEX=0
@@ -610,6 +622,10 @@ while [[ ! -f STOP ]]; do
     echo "Running provider: ${CURRENT_PROVIDER} | Task: ${CURRENT_TASK}"
 
     TASKS_ATTEMPTED["$CURRENT_PROVIDER"]=$(( ${TASKS_ATTEMPTED["$CURRENT_PROVIDER"]:-0} + 1 ))
+
+    # Keep last-task.txt fresh on every iteration so run_agent_task.sh always reads
+    # the correct task — not just when a task is first picked up from the queue.
+    echo "$CURRENT_TASK" > .ralph/last-task.txt
 
     exit_code=0
     bash "${ENGINEDIR}/run_agent_task.sh" --provider="${CURRENT_PROVIDER}" || exit_code=$?
