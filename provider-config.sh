@@ -50,7 +50,7 @@ provider_max_attempts() {
         groq_scout)     echo 2 ;;
         groq_qwen3)     echo 2 ;;
         groq_20b)       echo 2 ;;
-        groq_70b)       echo 3 ;;  # quality reserve — worth more attempts
+        groq_70b)       echo 2 ;;
         groq_120b)      echo 2 ;;
         groq_compound)  echo 1 ;;  # 250 RPD — use once, don't retry
         *)              echo 2 ;;
