@@ -53,7 +53,10 @@ read_run_mode() {
 # avoiding the file-corruption failure mode documented in ralph-engine-feedback.md.
 read_step_mode() {
     local task_file="$1" step val
-    step=$(grep -m1 -- '^- \[ \]' "$task_file" 2>/dev/null)
+    # Capture the first unchecked step including all continuation/annotation lines.
+    # grep -m1 only reads the first line, so multi-line annotations like `-- mode: claude`
+    # placed on continuation lines would be missed. awk reads until the next step marker.
+    step=$(awk 'found && /^- \[/{exit} /^- \[ \]/{found=1} found{print}' "$task_file" 2>/dev/null)
     val=$(printf '%s' "$step" | grep -oiP -- '-- mode:\s*\K[a-z]+' | head -1 | tr '[:upper:]' '[:lower:]')
     echo "${val:-any}"
 }
