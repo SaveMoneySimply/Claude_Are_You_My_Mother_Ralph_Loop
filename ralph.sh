@@ -228,8 +228,11 @@ ralph_update() {
     cp "$RALPH_SOURCE_REPO/ralph.sh" "ralph-aymm/ralph.sh"
     apply_sed_inplace "ralph-aymm/ralph.sh" -e '1,8s|bash ralph.sh|bash ralph-aymm/ralph.sh|'
 
+    echo "  Copying CLAUDE.md (loop operating manual)..."
+    cp "$RALPH_SOURCE_REPO/CLAUDE.md" CLAUDE.md
+
     echo "  Committing updates..."
-    git add ralph-aymm/
+    git add ralph-aymm/ CLAUDE.md
     git commit -m "update: ralph-aymm engine scripts"
 
     echo "Ralph engine files updated successfully."
